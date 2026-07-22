@@ -1,0 +1,255 @@
+Proud Scholar API Documentation
+==============================
+
+Base URL
+--------
+http://127.0.0.1:8001/api/v1
+
+Common Response Format
+----------------------
+All endpoints return a consistent JSON response structure:
+
+{
+  "success": true,
+  "message": "",
+  "data": {},
+  "errors": []
+}
+
+Authentication
+--------------
+
+1. Register a user
+POST /auth/register
+
+Description:
+Registers a new user within a tenant and returns JWT tokens.
+
+Request body:
+{
+  "username": "alice",
+  "email": "alice@example.com",
+  "password": "StrongPass123!",
+  "password_confirm": "StrongPass123!",
+  "first_name": "Alice",
+  "last_name": "Mwangi",
+  "tenant": "11111111-1111-1111-1111-111111111111",
+  "role_names": ["Teacher"]
+}
+
+Successful response:
+{
+  "success": true,
+  "message": "User registered successfully.",
+  "data": {
+    "access": "<jwt-access-token>",
+    "refresh": "<jwt-refresh-token>",
+    "refresh_token_id": "<uuid>",
+    "user": {
+      "id": "<uuid>",
+      "username": "alice",
+      "email": "alice@example.com",
+      "tenant": "11111111-1111-1111-1111-111111111111"
+    }
+  },
+  "errors": []
+}
+
+2. Login
+POST /auth/login
+
+Description:
+Authenticates a user and issues JWT tokens.
+
+Request body:
+{
+  "username": "alice",
+  "password": "StrongPass123!"
+}
+
+Alternative:
+{
+  "email": "alice@example.com",
+  "password": "StrongPass123!"
+}
+
+Successful response:
+{
+  "success": true,
+  "message": "Login successful.",
+  "data": {
+    "access": "<jwt-access-token>",
+    "refresh": "<jwt-refresh-token>",
+    "refresh_token_id": "<uuid>",
+    "user": {
+      "id": "<uuid>",
+      "username": "alice",
+      "email": "alice@example.com",
+      "tenant": "11111111-1111-1111-1111-111111111111"
+    }
+  },
+  "errors": []
+}
+
+3. Logout
+POST /auth/logout
+
+Description:
+Logs out the authenticated user and blacklists the refresh token.
+
+Headers:
+Authorization: Bearer <access-token>
+
+Request body:
+{
+  "refresh_token": "<refresh-token>"
+}
+
+Successful response:
+{
+  "success": true,
+  "message": "Logout successful.",
+  "data": {
+    "message": "Logged out successfully."
+  },
+  "errors": []
+}
+
+4. Refresh token
+POST /auth/refresh-token
+
+Description:
+Issues a new access token and rotates the refresh token.
+
+Request body:
+{
+  "refresh_token": "<refresh-token>"
+}
+
+Successful response:
+{
+  "success": true,
+  "message": "Token refreshed successfully.",
+  "data": {
+    "access": "<new-access-token>",
+    "refresh": "<new-refresh-token>",
+    "refresh_token_id": "<uuid>"
+  },
+  "errors": []
+}
+
+5. MFA setup
+POST /auth/mfa/setup
+
+Description:
+Registers an MFA device for the current user using TOTP.
+
+Headers:
+Authorization: Bearer <access-token>
+
+Request body:
+{
+  "password": "StrongPass123!",
+  "device_name": "Google Authenticator"
+}
+
+Successful response:
+{
+  "success": true,
+  "message": "MFA setup complete.",
+  "data": {
+    "secret": "<secret>",
+    "recovery_codes": ["A1B2C3D4", "E5F6G7H8"],
+    "otpauth_url": "otpauth://totp/ProudScholar:alice@example.com?secret=..."
+  },
+  "errors": []
+}
+
+6. MFA verify
+POST /auth/mfa/verify
+
+Description:
+Verifies the TOTP code supplied by the user.
+
+Headers:
+Authorization: Bearer <access-token>
+
+Request body:
+{
+  "code": "123456"
+}
+
+Successful response:
+{
+  "success": true,
+  "message": "MFA verified successfully.",
+  "data": {
+    "access": "<jwt-access-token>",
+    "refresh": "<jwt-refresh-token>",
+    "refresh_token_id": "<uuid>",
+    "user": {
+      "id": "<uuid>",
+      "username": "alice",
+      "email": "alice@example.com",
+      "tenant": "11111111-1111-1111-1111-111111111111"
+    }
+  },
+  "errors": []
+}
+
+7. Get current user profile
+GET /auth/me
+
+Description:
+Returns the authenticated user's profile.
+
+Headers:
+Authorization: Bearer <access-token>
+
+Successful response:
+{
+  "success": true,
+  "message": "Profile loaded.",
+  "data": {
+    "id": "<uuid>",
+    "username": "alice",
+    "email": "alice@example.com",
+    "tenant": "11111111-1111-1111-1111-111111111111"
+  },
+  "errors": []
+}
+
+8. Get user features and modules
+GET /auth/features
+
+Description:
+Returns the permissions/features assigned to the logged-in user and the modules they belong to.
+
+Headers:
+Authorization: Bearer <access-token>
+
+Successful response:
+{
+  "success": true,
+  "message": "Features retrieved.",
+  "data": {
+    "features": ["students.view", "students.create"],
+    "modules": ["students"]
+  },
+  "errors": []
+}
+
+Error handling
+--------------
+Common error responses include:
+- 400 Bad Request for validation failures
+- 401 Unauthorized for invalid or expired credentials
+- 403 Forbidden when a feature-based permission is missing
+
+Typical error shape:
+{
+  "success": false,
+  "message": "Invalid credentials.",
+  "data": {},
+  "errors": ["Invalid credentials."]
+}
