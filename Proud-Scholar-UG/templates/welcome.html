@@ -300,19 +300,19 @@
           <div id="mfaSection" class="hidden">
             <h4 class="text-center">Multi-Factor Authentication</h4>
             <p class="text-muted text-center mb-3">Set up MFA first, then verify the code from your authenticator app.</p>
-            <div class="mb-3">
+            <div class="mb-3" id="mfaPasswordWrap">
               <label class="form-label fw-semibold" style="color:#2b405b; font-size:0.9rem;">Password</label>
               <input type="password" class="form-control form-control-custom" placeholder="Confirm your password" id="mfaPassword" />
             </div>
-            <div class="mb-3">
+            <div class="mb-3" id="deviceNameWrap">
               <label class="form-label fw-semibold" style="color:#2b405b; font-size:0.9rem;">Device name</label>
               <input type="text" class="form-control form-control-custom" placeholder="Google Authenticator" id="deviceName" />
             </div>
-            <button class="btn btn-primary-custom text-white w-100 mb-3" onclick="setupMFA()">Set up MFA</button>
+            <button id="setupMfaBtn" class="btn btn-primary-custom text-white w-100 mb-3" onclick="setupMFA()">Set up MFA</button>
             <div id="mfaSetupResult" class="hidden mb-3">
               <div class="text-center mb-2"><img id="qrImage" alt="Authenticator QR code" class="img-thumbnail" style="max-width: 180px;" /></div>
               <div class="small text-muted mb-2" id="otpauthText"></div>
-              <div class="small bg-light rounded p-2 mb-3" id="recoveryCodes"></div>
+              <div class="small bg-light rounded p-2 mb-3 hidden" id="recoveryCodes"></div>
             </div>
             <p class="text-muted text-center mb-2">Enter the code from your authenticator app</p>
             <input type="text" class="form-control form-control-custom mb-3" placeholder="Enter 6 digit OTP code" id="otp" />
@@ -435,7 +435,43 @@ function renderMfaSetup(data) {
   document.getElementById("mfaSetupResult").classList.remove("hidden");
   document.getElementById("qrImage").src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(data.otpauth_url)}`;
   document.getElementById("otpauthText").textContent = data.otpauth_url || "";
-  document.getElementById("recoveryCodes").innerHTML = `<strong>Recovery codes</strong><br>${(data.recovery_codes || []).join("<br>")}`;
+  const codesEl = document.getElementById("recoveryCodes");
+  if (data.recovery_codes && data.recovery_codes.length) {
+    codesEl.innerHTML = `<strong>Recovery codes</strong><br>${(data.recovery_codes || []).join("<br>")}`;
+    codesEl.classList.remove('hidden');
+  } else {
+    codesEl.innerHTML = "";
+    codesEl.classList.add('hidden');
+  }
+}
+
+function configureMfaUI(mfaRequired, mfaSetupRequired) {
+  const deviceWrap = document.getElementById('deviceNameWrap');
+  const setupBtn = document.getElementById('setupMfaBtn');
+  const pwWrap = document.getElementById('mfaPasswordWrap');
+  const mfaSetupResult = document.getElementById('mfaSetupResult');
+
+  if (mfaRequired) {
+    // Existing device: hide setup controls, show only OTP verification
+    deviceWrap.classList.add('hidden');
+    setupBtn.classList.add('hidden');
+    pwWrap.classList.add('hidden');
+    mfaSetupResult.classList.add('hidden');
+  } else if (mfaSetupRequired) {
+    // First-time setup: show setup controls, hide any recovery codes until setup completes
+    deviceWrap.classList.remove('hidden');
+    setupBtn.classList.remove('hidden');
+    pwWrap.classList.remove('hidden');
+    mfaSetupResult.classList.add('hidden');
+    // default device name
+    const d = document.getElementById('deviceName');
+    if (d && !d.value) d.value = 'Google Authenticator';
+  } else {
+    // Fallback: show setup controls
+    deviceWrap.classList.remove('hidden');
+    setupBtn.classList.remove('hidden');
+    pwWrap.classList.remove('hidden');
+  }
 }
 
 function login() {
@@ -460,12 +496,14 @@ function login() {
         if (data.user) {
           setPendingMfaUser(data.user);
         }
-        showSection("mfaSection");
-        if (data.mfa_required) {
-          showMessage("MFA verification required. Enter your authenticator code.", "info");
-        } else {
-          showMessage("MFA setup required. Confirm your password and set up your authenticator.", "info");
-        }
+            // Configure MFA UI depending on whether verification is required (existing device)
+            configureMfaUI(!!data.mfa_required, !!data.mfa_setup_required);
+            showSection("mfaSection");
+            if (data.mfa_required) {
+              showMessage("MFA verification required. Enter your authenticator code.", "info");
+            } else {
+              showMessage("MFA setup required. Confirm your password and set up your authenticator.", "info");
+            }
         return;
       }
 
