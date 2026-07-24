@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Proud Scholar UG</title>
+    <meta
+      name="description"
+      content="A responsive AdminLTE v4 inspired dashboard implementation with sidebar, navbar, cards, chat, and sales analytics."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <div class="brand">
+          <div class="brand-mark">A</div>
+          <div>
+            <div class="brand-title">Proud Scholar UG</div>
+            <div class="brand-subtitle">Dashboard</div>
+          </div>
+        </div>
+
+        <div class="user-card">
+          <img src="https://adminlte.io/themes/v4/assets/img/user2-160x160.jpg" alt="Alexander Pierce" />
+          <div>
+            <p>Alexander Pierce</p>
+            <span>Product Manager</span>
+          </div>
+        </div>
+
+        <nav class="menu">
+          <div class="menu-group">
+            <button class="menu-item menu-toggle" type="button" data-menu-toggle="dashboards" aria-expanded="false">
+              <span>Dashboard</span><strong>12</strong>
+            </button>
+            <div class="menu-submenu" data-menu="dashboards" hidden>
+              <a class="menu-subitem" href="#dashboard">Dashboard v1</a>
+              <a class="menu-subitem" href="#widgets">Dashboard v2</a>
+              <a class="menu-subitem" href="#pages">Dashboard v3</a>
+              <button class="menu-subitem menu-subaction" type="button" data-create-dashboard>
+                Create new dashboard
+              </button>
+            </div>
+          </div>
+          <a class="menu-item" href="#widgets"><span>Widgets</span><strong>7</strong></a>
+          <a class="menu-item" href="#sales"><span>Charts</span><strong>Live</strong></a>
+          <a class="menu-item" href="#messages"><span>Mailbox</span><strong>3</strong></a>
+          <a class="menu-item" href="#forms"><span>Forms</span><strong>New</strong></a>
+          <a class="menu-item" href="#tables"><span>Tables</span><strong>24</strong></a>
+          <a class="menu-item" href="#pages"><span>Pages</span><strong>18</strong></a>
+        </nav>
+
+        
+      </aside>
+
+      <div class="backdrop" data-sidebar-close></div>
+
+      <div class="main-area">
+        <header class="topbar">
+          <button class="icon-button" type="button" data-sidebar-toggle aria-label="Toggle sidebar">
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+
+          <div class="topbar-search" role="search">
+            <span aria-hidden="true">⌕</span>
+            <input type="search" placeholder="Search projects, users, reports" aria-label="Search" />
+          </div>
+
+          <div class="topbar-actions">
+            <button class="pill-button" type="button" data-theme-toggle>Toggle color scheme</button>
+            <div class="topbar-control">
+              <button class="icon-chip" type="button" data-panel-toggle="messages" aria-haspopup="true" aria-expanded="false" aria-label="Messages">3</button>
+              <div class="dropdown-panel" data-panel="messages" hidden>
+                <div class="dropdown-head">
+                  <strong>Messages</strong>
+                  <span>3 unread</span>
+                </div>
+                <a href="#messages">Alexander Pierce invited you to a new project</a>
+                <a href="#messages">Sarah Bullock shared updated mockups</a>
+                <a href="#messages">Nadia Jolie sent a follow-up note</a>
+              </div>
+            </div>
+            <div class="topbar-control">
+              <button class="icon-chip" type="button" data-panel-toggle="notifications" aria-haspopup="true" aria-expanded="false" aria-label="Notifications">15</button>
+              <div class="dropdown-panel" data-panel="notifications" hidden>
+                <div class="dropdown-head">
+                  <strong>Notifications</strong>
+                  <span>15 unread</span>
+                </div>
+                <a href="#sales">New sales report generated</a>
+                <a href="#tables">3 orders need review</a>
+                <a href="#pages">System health is stable</a>
+              </div>
+            </div>
+            <button class="icon-chip" type="button" data-fullscreen-toggle aria-label="Toggle fullscreen">⛶</button>
+            <img class="avatar" src="https://adminlte.io/themes/v4/assets/img/user8-128x128.jpg" alt="Sarah Doe" />
+          </div>
+        </header>
+
+        <section class="creator-panel card" data-creator-panel hidden aria-label="Create dashboard form">
+          <div class="section-head creator-head">
+            <div>
+              <p class="eyebrow">Dashboard Builder</p>
+              <h2>Create a new dashboard</h2>
+            </div>
+            <button class="tool-button" type="button" data-creator-close>Close</button>
+          </div>
+
+          <form class="creator-form" data-dashboard-form>
+            <label class="field">
+              <span>Role name</span>
+              <input type="text" name="roleName" placeholder="Finance lead, sales manager, support lead" required />
+            </label>
+
+            <div class="field-grid">
+              <label class="field">
+                <span>Primary color</span>
+                <input type="color" name="primaryColor" value="#3c8dbc" required />
+              </label>
+              <label class="field">
+                <span>Accent color</span>
+                <input type="color" name="accentColor" value="#00a65a" required />
+              </label>
+            </div>
+
+            <label class="field">
+              <span>Default mode</span>
+              <select name="mode" class="select-input">
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
+            </label>
+
+            <div class="field">
+              <span>Sidebar features</span>
+              <div class="feature-grid">
+                <label><input type="checkbox" name="features" value="Overview" checked /> Overview</label>
+                <label><input type="checkbox" name="features" value="Analytics" checked /> Analytics</label>
+                <label><input type="checkbox" name="features" value="Messages" checked /> Messages</label>
+                <label><input type="checkbox" name="features" value="Tasks" /> Tasks</label>
+                <label><input type="checkbox" name="features" value="Tables" /> Tables</label>
+                <label><input type="checkbox" name="features" value="Members" /> Members</label>
+                <label><input type="checkbox" name="features" value="Settings" /> Settings</label>
+                <label><input type="checkbox" name="features" value="Reports" /> Reports</label>
+              </div>
+            </div>
+
+            <div class="creator-actions">
+              <button class="pill-button primary-action" type="submit">Create dashboard</button>
+              <p>Select the fields you want. The sidebar tree and content sections are generated from this form.</p>
+            </div>
+          </form>
+        </section>
+
+        <main class="content" id="dashboard">
+          <section class="hero card">
+            <div>
+              <p class="eyebrow">Dashboard</p>
+              <h1>Institution control center</h1>
+              <p class="hero-copy">
+                A polished dashboard surface with the same high-density information layout, crisp cards,
+                and practical admin workflow cues that define the original theme.
+              </p>
+            </div>
+            <div class="hero-metric">
+              <span>Monthly revenue</span>
+              <strong>$128,430</strong>
+              <small>+14.2% from last month</small>
+            </div>
+          </section>
+
+          <section class="stats-grid" aria-label="Key metrics">
+            <article class="stat-card stat-blue">
+              <div>
+                <p>New Orders</p>
+                <strong>150</strong>
+              </div>
+              <span>↗</span>
+            </article>
+            <article class="stat-card stat-green">
+              <div>
+                <p>Bounce Rate</p>
+                <strong>53%</strong>
+              </div>
+              <span>↘</span>
+            </article>
+            <article class="stat-card stat-amber">
+              <div>
+                <p>User Registrations</p>
+                <strong>44</strong>
+              </div>
+              <span>↗</span>
+            </article>
+            <article class="stat-card stat-cyan">
+              <div>
+                <p>Unique Visitors</p>
+                <strong>65</strong>
+              </div>
+              <span>↗</span>
+            </article>
+          </section>
+
+          <section class="layout-grid">
+            <article class="card chart-card" id="sales">
+              <div class="section-head">
+                <div>
+                  <p class="eyebrow">Sales Value</p>
+                  <h2>Traffic and conversions</h2>
+                </div>
+                <div class="section-tools">
+                  <button class="tool-button" type="button" data-chart-refresh>Refresh data</button>
+                  <button class="tool-button" type="button" data-card-toggle="sales" aria-expanded="true">Collapse</button>
+                </div>
+                <div class="mini-legend">
+                  <span><i class="dot blue"></i>Visitors</span>
+                  <span><i class="dot green"></i>Online</span>
+                  <span><i class="dot amber"></i>Sales</span>
+                </div>
+              </div>
+
+              <div class="chart" aria-label="Sales value chart">
+                <div class="chart-bars" aria-hidden="true">
+                  <span style="--value: 38%"></span>
+                  <span style="--value: 56%"></span>
+                  <span style="--value: 42%"></span>
+                  <span style="--value: 72%"></span>
+                  <span style="--value: 61%"></span>
+                  <span style="--value: 83%"></span>
+                  <span style="--value: 64%"></span>
+                  <span style="--value: 91%"></span>
+                  <span style="--value: 78%"></span>
+                  <span style="--value: 95%"></span>
+                </div>
+                <div class="chart-labels">
+                  <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="card chat-card" id="messages">
+              <div class="section-head">
+                <div>
+                  <p class="eyebrow">Direct Chat</p>
+                  <h2>Team pulse</h2>
+                </div>
+                <div class="section-tools">
+                  <button class="tool-button" type="button" data-card-toggle="messages" aria-expanded="true">Collapse</button>
+                  <span class="badge">3 unread</span>
+                </div>
+              </div>
+
+              <div class="chat-thread">
+                <div class="message incoming">
+                  <img src="https://adminlte.io/themes/v4/assets/img/user1-128x128.jpg" alt="Alexander Pierce" />
+                  <div>
+                    <strong>Alexander Pierce</strong>
+                    <p>Is this template really for free? That&apos;s unbelievable!</p>
+                    <time>23 Jan 2:00 pm</time>
+                  </div>
+                </div>
+                <div class="message outgoing">
+                  <div>
+                    <strong>Sarah Bullock</strong>
+                    <p>You better believe it! Working with AdminLTE on a great new app.</p>
+                    <time>23 Jan 2:05 pm</time>
+                  </div>
+                  <img src="https://adminlte.io/themes/v4/assets/img/user3-128x128.jpg" alt="Sarah Bullock" />
+                </div>
+                <div class="message incoming compact">
+                  <img src="https://adminlte.io/themes/v4/assets/img/user1-128x128.jpg" alt="Alexander Pierce" />
+                  <div>
+                    <strong>Alexander Pierce</strong>
+                    <p>Wanna join?</p>
+                    <time>23 Jan 5:37 pm</time>
+                  </div>
+                </div>
+              </div>
+
+              <form class="chat-form" data-chat-form>
+                <input type="text" placeholder="Type a message" aria-label="Type a message" />
+                <button type="submit">Send</button>
+              </form>
+            </article>
+          </section>
+
+          <section class="layout-grid lower-grid" id="widgets">
+            <article class="card list-card">
+              <div class="section-head">
+                <div>
+                  <p class="eyebrow">Latest Messages</p>
+                  <h2>Inbox preview</h2>
+                </div>
+                <div class="section-tools">
+                  <button class="tool-button" type="button" data-card-toggle="inbox" aria-expanded="true">Collapse</button>
+                  <a href="#" class="text-link">View all</a>
+                </div>
+              </div>
+
+              <div class="message-list" id="inbox">
+                <div class="message-row">
+                  <img src="https://adminlte.io/themes/v4/assets/img/user2-160x160.jpg" alt="Count Dracula" />
+                  <div>
+                    <strong>Count Dracula</strong>
+                    <p>How have you been? I was hoping we could review the release plan.</p>
+                  </div>
+                  <time>2/28/2023</time>
+                </div>
+                <div class="message-row">
+                  <img src="https://adminlte.io/themes/v4/assets/img/user3-128x128.jpg" alt="Sarah Doe" />
+                  <div>
+                    <strong>Sarah Doe</strong>
+                    <p>I will be waiting for the final design mockups later today.</p>
+                  </div>
+                  <time>2/23/2023</time>
+                </div>
+                <div class="message-row">
+                  <img src="https://adminlte.io/themes/v4/assets/img/user4-128x128.jpg" alt="Nadia Jolie" />
+                  <div>
+                    <strong>Nadia Jolie</strong>
+                    <p>I&apos;ll call you back at noon with the updated numbers.</p>
+                  </div>
+                  <time>2/20/2023</time>
+                </div>
+              </div>
+            </article>
+
+            <article class="card list-card" id="tables">
+              <div class="section-head">
+                <div>
+                  <p class="eyebrow">Recent Sales</p>
+                  <h2>Orders and status</h2>
+                </div>
+                <div class="section-tools">
+                  <button class="tool-button" type="button" data-card-toggle="tables" aria-expanded="true">Collapse</button>
+                  <span class="badge badge-soft">Updated just now</span>
+                </div>
+              </div>
+
+              <table class="data-table" id="tables-body">
+                <thead>
+                  <tr>
+                    <th>Order</th>
+                    <th>Item</th>
+                    <th>Status</th>
+                    <th>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>#3023</td>
+                    <td>Dashboard redesign</td>
+                    <td><span class="status status-green">Shipped</span></td>
+                    <td>$1,240</td>
+                  </tr>
+                  <tr>
+                    <td>#3018</td>
+                    <td>Subscription renewal</td>
+                    <td><span class="status status-amber">Pending</span></td>
+                    <td>$480</td>
+                  </tr>
+                  <tr>
+                    <td>#3009</td>
+                    <td>UX audit</td>
+                    <td><span class="status status-blue">Delivered</span></td>
+                    <td>$890</td>
+                  </tr>
+                </tbody>
+              </table>
+            </article>
+          </section>
+
+          <section class="cards-row" id="pages">
+            <article class="card feature-card" id="forms">
+              <p class="eyebrow">Forms</p>
+              <h2>Quick capture</h2>
+              <p>Fast field layouts for settings, profiles, and operational admin work.</p>
+            </article>
+            <article class="card feature-card" id="pages-list">
+              <p class="eyebrow">Pages</p>
+              <h2>Reusable patterns</h2>
+              <p>Cards, tables, chat, and stats can be mixed into dashboards and content pages.</p>
+            </article>
+            <article class="card feature-card">
+              <p class="eyebrow">Layout</p>
+              <h2>Responsive shell</h2>
+              <p>Sidebar collapses on smaller screens and the main canvas stays readable.</p>
+            </article>
+          </section>
+        </main>
+      </div>
+    </div>
+    <div class="toast-stack" aria-live="polite" aria-atomic="true"></div>
+  </body>
+</html>

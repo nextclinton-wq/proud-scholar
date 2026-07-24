@@ -1,0 +1,877 @@
+﻿<!DOCTYPE html>
+const API_BASE = "/api/v1/auth";
+const TOKEN_KEYS = {
+  access: "proudScholarAccessToken",
+  refresh: "proudScholarRefreshToken",
+  user: "proudScholarUser",
+};
+
+function showMessage(message, type = "info") {
+  const alertBox = document.getElementById("apiAlert");
+  alertBox.className = `alert py-2 px-3 small alert-${type}`;
+  alertBox.textContent = message;
+  alertBox.classList.remove("d-none");
+}
+
+function clearMessage() {
+  const alertBox = document.getElementById("apiAlert");
+  alertBox.classList.add("d-none");
+  alertBox.textContent = "";
+}
+
+function getStoredAuth() {
+  return {
+    access: sessionStorage.getItem(TOKEN_KEYS.access) || "",
+    refresh: sessionStorage.getItem(TOKEN_KEYS.refresh) || "",
+    user: JSON.parse(sessionStorage.getItem(TOKEN_KEYS.user) || "null"),
+  };
+}
+
+function storeAuth(data) {
+  if (data.access) {
+    sessionStorage.setItem(TOKEN_KEYS.access, data.access);
+  }
+  if (data.refresh) {
+    sessionStorage.setItem(TOKEN_KEYS.refresh, data.refresh);
+  }
+  if (data.user) {
+    sessionStorage.setItem(TOKEN_KEYS.user, JSON.stringify(data.user));
+  }
+}
+
+function clearAuth() {
+  sessionStorage.removeItem(TOKEN_KEYS.access);
+  sessionStorage.removeItem(TOKEN_KEYS.refresh);
+  sessionStorage.removeItem(TOKEN_KEYS.user);
+}
+
+// Read a cookie value by name (used to fetch CSRF token)
+function getCookie(name) {
+  const matches = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+  return matches ? decodeURIComponent(matches[2]) : null;
+}
+
+function authHeaders(includeJson = true) {
+  const headers = {};
+  const { access } = getStoredAuth();
+  if (access) {
+    headers.Authorization = `Bearer ${access}`;
+  }
+  if (includeJson) {
+    headers["Content-Type"] = "application/json";
+  }
+  // If this page has a CSRF cookie, include it for non-safe requests
+  const csrf = getCookie('csrftoken');
+  if (csrf) {
+    headers['X-CSRFToken'] = csrf;
+  }
+  return headers;
+}
+
+async function apiRequest(path, options = {}) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    credentials: "same-origin",
+    headers: {
+      ...authHeaders(options.body !== undefined),
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.success === false) {
+    const errorMessage = payload.message || payload.errors?.[0] || `Request failed with status ${response.status}`;
+    throw new Error(errorMessage);
+  }
+  return payload.data || {};
+}
+
+function showSection(sectionId) {
+  ["loginSection", "mfaSection", "dashboard"].forEach((id) => {
+    document.getElementById(id).classList.toggle("hidden", id !== sectionId);
+  });
+}
+
+function renderDashboard(user) {
+  showSection("dashboard");
+  clearMessage();
+  const heading = document.querySelector("#dashboard h3");
+  if (heading && user?.username) {
+    heading.textContent = `Welcome, ${user.username}!`;
+  }
+}
+
+function renderMfaSetup(data) {
+  const setupResult = document.getElementById("mfaSetupResult");
+  const qrImage = document.getElementById("qrImage");
+  const otpauthText = document.getElementById("otpauthText");
+  const recoveryCodes = document.getElementById("recoveryCodes");
+  setupResult.classList.remove("hidden");
+  qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(data.otpauth_url)}`;
+  qrImage.alt = "Authenticator QR code";
+  otpauthText.textContent = data.otpauth_url || "";
+  recoveryCodes.innerHTML = `<strong>Recovery codes</strong><br>${(data.recovery_codes || []).join("<br>")}`;
+}
+
+function login() {
+  const username = document.getElementById("username").value.trim();
+  const password = document.getElementById("password").value.trim();
+
+  if (username === "" || password === "") {
+    showMessage("Enter username and password", "warning");
+    return;
+  }
+
+  const body = username.includes("@") ? { email: username, password } : { username, password };
+  clearMessage();
+
+  apiRequest("/login", {
+    method: "POST",
+    body: JSON.stringify(body),
+  })
+    .then((data) => {
+      storeAuth(data);
+      document.getElementById("mfaPassword").value = password;
+      document.getElementById("deviceName").value = "Google Authenticator";
+      document.getElementById("otp").value = "";
+      document.getElementById("mfaSetupResult").classList.add("hidden");
+      showMessage("Login successful. You can now set up MFA or use token actions.", "success");
+      renderDashboard(data.user);
+    })
+    .catch((error) => {
+      showMessage(error.message, "danger");
+    });
+}
+
+function setupMFA() {
+  const password = document.getElementById("mfaPassword").value.trim();
+  const deviceName = document.getElementById("deviceName").value.trim();
+
+  if (!password) {
+    showMessage("Enter your password to set up MFA.", "warning");
+    return;
+  }
+
+  clearMessage();
+  apiRequest("/mfa/setup", {
+    method: "POST",
+    body: JSON.stringify({ password, device_name: deviceName }),
+  })
+    .then((data) => {
+      renderMfaSetup(data);
+      showSection("mfaSection");
+      showMessage("MFA setup created. Scan the QR code and verify a code.", "success");
+    })
+    .catch((error) => {
+      showMessage(error.message, "danger");
+    });
+}
+
+function verifyMFA() {
+  const otp = document.getElementById("otp").value.trim();
+
+  if (otp.length < 6) {
+    showMessage("Invalid MFA code", "warning");
+    return;
+  }
+
+  clearMessage();
+  apiRequest("/mfa/verify", {
+    method: "POST",
+    body: JSON.stringify({ code: otp }),
+  })
+    .then((data) => {
+      storeAuth(data);
+      showMessage("MFA verified successfully.", "success");
+      renderDashboard(data.user);
+    })
+    .catch((error) => {
+      showMessage(error.message, "danger");
+    });
+}
+
+async function refreshAccessToken() {
+  const { refresh } = getStoredAuth();
+  if (!refresh) {
+    showMessage("No refresh token available. Sign in first.", "warning");
+    return;
+  }
+
+  clearMessage();
+  try {
+    const data = await apiRequest("/refresh-token", {
+      method: "POST",
+      body: JSON.stringify({ refresh_token: refresh }),
+    });
+    storeAuth(data);
+    showMessage("Token refreshed successfully.", "success");
+  } catch (error) {
+    showMessage(error.message, "danger");
+  }
+}
+
+async function loadProfile() {
+  try {
+    const data = await apiRequest("/me", { method: "GET" });
+    showMessage(`Profile loaded for ${data.username}.`, "success");
+  } catch (error) {
+    showMessage(error.message, "danger");
+  }
+}
+
+async function loadFeatures() {
+  try {
+    const data = await apiRequest("/features", { method: "GET" });
+    const features = (data.features || []).join(", ") || "No features assigned";
+    showMessage(`Features: ${features}`, "success");
+  } catch (error) {
+    showMessage(error.message, "danger");
+  }
+}
+
+async function logout() {
+  const { refresh } = getStoredAuth();
+  try {
+    if (refresh) {
+      await apiRequest("/logout", {
+// Read a cookie value by name (used to fetch CSRF token)
+function getCookie(name) {
+  const matches = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+  return matches ? decodeURIComponent(matches[2]) : null;
+}
+
+function authHeaders(includeJson = true) {
+  const headers = {};
+  const { access } = getStoredAuth();
+  if (access) headers.Authorization = `Bearer ${access}`;
+  if (includeJson) headers["Content-Type"] = "application/json";
+  const csrf = getCookie('csrftoken');
+  if (csrf) headers['X-CSRFToken'] = csrf;
+  return headers;
+}
+
+async function apiRequest(path, options = {}) {
+  const response = await fetch(`${API_BASE}${path}`, {
+    credentials: "same-origin",
+    headers: {
+      ...authHeaders(options.body !== undefined),
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+      color: #5f6f88;
+      margin-bottom: 1.6rem;
+    }
+    .right-panel .footer-copy {
+      color: #6a7a98;
+      font-size: 0.87rem;
+    }
+
+    /* ----- LOGO FIX: proper sizing & fallback ----- */
+    .logo-inline {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-shrink: 0;
+      min-width: 0;
+    }
+    .logo-inline img {
+      height: 130px;
+      width: auto;
+      display: block;
+      object-fit: contain;
+      flex-shrink: 0;
+      max-width: 100%;
+    }
+    /* Fallback text if image fails to load */
+    .logo-fallback {
+      display: none;
+      font-size: 1.8rem;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.02em;
+      line-height: 1.1;
+    }
+    .logo-fallback small {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 400;
+      color: rgba(255,255,255,0.5);
+    }
+    .logo-inline img:not([src]), 
+    .logo-inline img[src=""],
+    .logo-inline img[src="#"] {
+      display: none;
+    }
+    .logo-inline img:not([src]) + .logo-fallback,
+    .logo-inline img[src=""] + .logo-fallback,
+    .logo-inline img[src="#"] + .logo-fallback {
+      display: block;
+    }
+    /* If image fails to load, show fallback */
+    .logo-inline img.error + .logo-fallback {
+      display: block;
+    }
+
+    .trust-badge {
+      background: rgba(255, 255, 255, 0.08);
+      color: #c38411;
+      font-weight: 400;
+      font-size: 0.76rem;
+      padding: 0.2rem 0.8rem;
+      border-radius: 50px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      border: 1px solid rgba(255,255,255,0.08);
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+    .trust-badge i {
+      color: #2ca024;
+    }
+
+    .headline-primary {
+      color: #ffffff;
+      letter-spacing: -0.02em;
+    }
+    .headline-primary span {
+      color: #e08b1e;
+    }
+    .subhead-text {
+      color: rgba(255, 255, 255, 0.7);
+      max-width: 90%;
+    }
+
+    .stats-box {
+      background: rgba(12, 28, 50, 0.6);
+      border-radius: 1rem;
+      padding: 0.6rem;
+      width: 230px;
+      border: 1px solid rgba(255,255,255,0.03);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.35);
+    }
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.45rem 0.35rem;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .icon-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 0.35rem;
+      margin-top: 1rem;
+      align-items: start;
+    }
+    .icon-item {
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      padding: 0.12rem 0.08rem;
+      text-align: center;
+      box-shadow: none;
+      min-width: 0;
+    }
+    .icon-wrap {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 0.45rem;
+      display: grid;
+      place-items: center;
+      border-radius: 16px;
+      background: rgba(224, 139, 30, 0.16);
+      color: #e08b1e;
+    }
+    .icon-wrap .bi {
+      font-size: 1.2rem;
+    }
+    .icon-label {
+      color: #eff6ff;
+      font-size: 0.75rem;
+      font-weight: 600;
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+      white-space: normal;
+      max-width: 100%;
+    }
+    @media (max-width: 768px) {
+      .icon-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 576px) {
+      .icon-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 0.4rem;
+        margin-top: 0.8rem;
+      }
+      .icon-item {
+        min-width: 0;
+        padding: 0.05rem 0.05rem;
+      }
+      .icon-wrap {
+        width: 42px;
+        height: 42px;
+      }
+      .icon-wrap .bi {
+        font-size: 1.1rem;
+      }
+      .icon-label {
+        font-size: 0.7rem;
+        line-height: 1.15;
+      }
+    }
+    .stat-item:last-child { border-bottom: none; }
+    .stat-icon {
+      background: rgba(232,141,13,0.12);
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #e88d0d;
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+    .stat-item .stat-number { font-size: 1.05rem; font-weight: 800; color: #ffffff; }
+    .stat-item .stat-label { font-size: 0.85rem; color: rgba(255,255,255,0.65); text-transform: none; }
+
+    .feature-pill {
+      background: rgba(255, 255, 255, 0.06);
+      padding: 0.18rem 0.55rem;
+      border-radius: 50px;
+      font-weight: 500;
+      color: #d6e4ff;
+      font-size: 0.72rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .feature-slim {
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 1.15rem;
+      padding: 0.2rem 0.4rem;
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .feature-slim i {
+      font-size: 1.6rem;
+      color: #8bb9ff;
+      width: 2rem;
+      flex-shrink: 0;
+    }
+    .feature-slim .ftitle {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: #ffffff;
+    }
+    .feature-slim .fsub {
+      font-size: 0.7rem;
+      color: rgba(255, 255, 255, 0.5);
+    }
+
+    .btn-primary-custom {
+      background: #1a4f8b;
+      border: none;
+      padding: 0.55rem 1rem;
+      font-weight: 600;
+      border-radius: 60px;
+      box-shadow: 0 8px 20px -6px rgba(26, 79, 139, 0.3);
+      transition: 0.15s;
+    }
+    .btn-primary-custom:hover {
+      background: #0f3d6b;
+      transform: translateY(-2px);
+      box-shadow: 0 12px 24px -8px rgba(26, 79, 139, 0.4);
+    }
+    .form-control-custom {
+      border-radius: 40px;
+      padding: 0.5rem 0.9rem;
+      border: 1px solid #e0e8f2;
+      background: #fafcff;
+      font-size: 0.92rem;
+    }
+    .form-control-custom:focus {
+      box-shadow: 0 0 0 3px rgba(26, 79, 139, 0.12);
+      border-color: #1a4f8b;
+      background: white;
+    }
+    .forgot-link, .signup-link {
+      color: #1a4f8b;
+      font-weight: 600;
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    .forgot-link:hover, .signup-link:hover {
+      text-decoration: underline;
+      color: #0d3b68;
+    }
+    .pride-tagline {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.4);
+    }
+
+    /* ---- MOBILE RESPONSIVE FIXES ---- */
+    @media (max-width: 992px) {
+      .right-panel {
+        border-radius: 1.8rem;
+        margin-top: 1.8rem;
+        padding: 2rem 1.5rem;
+      }
+      .left-panel {
+        padding: 0.5rem 0.2rem;
+      }
+      .glass-inner {
+        padding: 1rem;
+      }
+      .page-wrap {
+        border-radius: 1.8rem;
+      }
+    }
+
+    @media (max-width: 576px) {
+      .row.g-0.align-items-stretch {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: stretch;
+        min-height: auto;
+      }
+      .row.g-0 .left-panel,
+      .row.g-0 .right-panel {
+        flex: 1 1 100%;
+        max-width: 100%;
+        min-width: 0;
+      }
+      .row.g-0 .right-panel {
+        margin-top: 1rem;
+      }
+      .left-panel {
+        padding: 1rem 0.8rem 1rem 0.8rem;
+      }
+      .right-panel {
+        padding: 1.4rem 1.2rem;
+        min-width: 0;
+        max-width: 100%;
+      }
+      
+      /* ---- FIX: Logo on mobile ---- */
+      .left-panel .d-flex.align-items-start.justify-content-between {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      .logo-inline {
+        flex-shrink: 1;
+        min-width: 0;
+      }
+      .logo-inline img {
+        height: 70px;
+        max-width: 180px;
+        width: auto;
+      }
+      .trust-badge {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.6rem;
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .headline-primary {
+        font-size: 2.2rem;
+        line-height: 1.06;
+        margin-bottom: 0.75rem;
+      }
+      .subhead-text {
+        font-size: 0.95rem;
+        max-width: 100%;
+      }
+      .stats-box {
+        width: 100%;
+        max-width: 260px;
+      }
+      .feature-slim {
+        padding: 0.15rem 0.3rem;
+      }
+      .feature-slim i {
+        font-size: 1.2rem;
+        width: 1.6rem;
+      }
+      .feature-slim .ftitle {
+        font-size: 0.75rem;
+      }
+      .feature-slim .fsub {
+        font-size: 0.6rem;
+      }
+      .row.g-2 .col-4 {
+        padding-right: 0.3rem;
+        padding-left: 0.3rem;
+      }
+    }
+
+    @media (max-width: 400px) {
+      .logo-inline img {
+        height: 55px;
+        max-width: 140px;
+      }
+      .trust-badge {
+        font-size: 0.6rem;
+        padding: 0.1rem 0.5rem;
+      }
+      .headline-primary {
+        font-size: 1.8rem;
+      }
+    }
+    .hidden {
+      display: none;
+    }
+    
+  </style>
+</head>
+<body>
+
+<div class="page-wrap">
+  <div class="glass-inner">
+    <div class="row g-0 align-items-stretch">
+
+      <!-- LEFT: dark panel -->
+      <div class="col-lg-7 left-panel d-flex flex-column">
+
+        <!-- top row: logo block and trust badge -->
+        <div class="d-flex align-items-start justify-content-between mb-2 flex-wrap gap-2">
+          <div class="logo-inline">
+            <!-- IMPORTANT: Replace 'logo.png' with your actual logo path -->
+            <img src="logo.png" alt="Proud Scholar logo" onerror="this.classList.add('error'); this.style.display='none';" />
+            <div class="logo-fallback">
+              ProudScholar<span style="color:#e8b34f;">UG</span>
+              <small>The Pride of Modern Education</small>
+            </div>
+          </div>
+          <div class="trust-badge">
+            <i class="bi bi-check-circle-fill"></i> Trusted by 1000+ Schools
+          </div>
+        </div>
+
+        <!-- headline -->
+        <div style="flex-shrink:0;">
+          <h1 class="fw-bold headline-primary">
+            Empowering Schools.<br />
+            <span>Inspiring Futures.</span>
+          </h1>
+          <p class="fs-6 mt-1 subhead-text" style="max-width: 80%; margin-bottom: 0;">
+            A smart, secure and complete school management platform for modern education.
+          </p>
+        </div>
+
+        <!-- stats box -->
+        <div class="my-2">
+          <div class="stats-box">
+            <div class="stat-item">
+              <div class="stat-icon"><i class="bi bi-building"></i></div>
+              <div>
+                <div class="stat-number">10,000+</div>
+                <div class="stat-label">Schools Supported</div>
+              </div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-icon"><i class="bi bi-people-fill"></i></div>
+              <div>
+                <div class="stat-number">5M+</div>
+                <div class="stat-label">Students Managed</div>
+              </div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-icon"><i class="bi bi-graph-up"></i></div>
+              <div>
+                <div class="stat-number">50,000+</div>
+                <div class="stat-label">Concurrent Users</div>
+              </div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-icon"><i class="bi bi-shield-lock-fill"></i></div>
+              <div>
+                <div class="stat-number">99.5%</div>
+                <div class="stat-label">Platform Uptime</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- feature icon cards -->
+        <div class="icon-grid mt-3">
+          <div class="icon-item">
+            <div class="icon-wrap"><i class="bi bi-people-fill"></i></div>
+            <div class="icon-label">Student Management</div>
+          </div>
+          <div class="icon-item">
+            <div class="icon-wrap"><i class="bi bi-cpu"></i></div>
+            <div class="icon-label">Learning & AI</div>
+          </div>
+          <div class="icon-item">
+            <div class="icon-wrap"><i class="bi bi-wallet2"></i></div>
+            <div class="icon-label">Fees & Payments</div>
+          </div>
+          <div class="icon-item">
+            <div class="icon-wrap"><i class="bi bi-people"></i></div>
+            <div class="icon-label">Parent & Teacher Portals</div>
+          </div>
+          <div class="icon-item">
+            <div class="icon-wrap"><i class="bi bi-bar-chart-line-fill"></i></div>
+            <div class="icon-label">Reports & Analytics</div>
+          </div>
+        </div>
+
+        <!-- pride line -->
+        <div class="mt-3 pt-1 pride-tagline">
+          <i class="bi bi-mortarboard-fill me-1"></i> The Pride of Modern Education
+        </div>
+      </div>
+
+      <!-- RIGHT: white sign in -->
+      <div class="col-lg-5 d-flex align-items-stretch justify-content-center">
+        <div class="right-panel">
+          <div id="apiAlert" class="alert d-none py-2 px-3 small" role="alert"></div>
+          <div id="loginSection">
+            <div class="mb-4">
+              <h3 class="fw-bold section-heading">Welcome Back!</h3>
+              <p class="section-copy">Sign in to continue to your account</p>
+            </div>
+            <form>
+              {% csrf_token %}
+              <div class="mb-3">
+                <label class="form-label fw-semibold" style="color:#2b405b; font-size:0.9rem;">Username</label>
+                <input id="username" type="text" class="form-control form-control-custom" placeholder="Enter your username" />
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold d-flex justify-content-between" style="color:#2b405b; font-size:0.9rem;">
+                  Password
+                </label>
+                <input id="password" type="password" class="form-control form-control-custom" placeholder="Enter your password" />
+              </div>
+              <div class="d-flex flex-wrap align-items-center justify-content-between mb-3">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="rememberCheck" style="border-radius: 4px; border-color: #b8c9dd;" />
+                  <label class="form-check-label" for="rememberCheck" style="font-size:0.9rem; color:#2b405b;">Remember me</label>
+                </div>
+                <a href="#" class="forgot-link">Forgot password?</a>
+              </div>
+              <button type="button" class="btn btn-primary-custom text-white w-100 mb-3" onclick="login()">
+                Sign In <i class="bi bi-arrow-right-short ms-1"></i>
+              </button>
+            </form>
+            <p class="text-center mt-2 footer-copy">
+              <i class="bi bi-shield-check me-1"></i> Secure · Privacy first
+            </p>
+            <div class="d-flex flex-wrap gap-2 justify-content-center">
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="refreshAccessToken()">Refresh token</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" onclick="loadProfile()">Load profile</button>
+            </div>
+          </div>
+
+          <!-- MFA FORM -->
+           <div id="mfaSection" class="hidden">
+            <h4 class="text-center">Multi-Factor Authentication</h4>
+            <p class="text-muted text-center mb-3">Set up MFA first, then verify the code from your authenticator app.</p>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold" style="color:#2b405b; font-size:0.9rem;">Password</label>
+              <input type="password" class="form-control form-control-custom" placeholder="Confirm your password" id="mfaPassword" />
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold" style="color:#2b405b; font-size:0.9rem;">Device name</label>
+              <input type="text" class="form-control form-control-custom" placeholder="Google Authenticator" id="deviceName" />
+            </div>
+            <button class="btn btn-primary-custom text-white w-100 mb-3" onclick="setupMFA()">
+              Set up MFA
+            </button>
+
+            <div id="mfaSetupResult" class="hidden mb-3">
+              <div class="text-center mb-2">
+                <img id="qrImage" alt="Authenticator QR code" class="img-thumbnail" style="max-width: 180px;" />
+              </div>
+              <div class="small text-muted mb-2" id="otpauthText"></div>
+              <div class="small bg-light rounded p-2 mb-3" id="recoveryCodes"></div>
+            </div>
+
+            <p class="text-muted text-center mb-2">Enter the code from your authenticator app</p>
+            <input type="text" class="form-control form-control-custom mb-3" placeholder="Enter 6 digit OTP code" id="otp" />
+            <button class="btn btn-success w-100" onclick="verifyMFA()">
+              Verify MFA
+            </button>
+           </div>
+           <!-- DASHBOARD -->
+             <div id="dashboard" class="hidden text-center">
+             <h3 class="fw-bold mb-2">Welcome 🎉</h3>
+             <p>You are successfully authenticated.</p>
+                <div class="d-flex flex-wrap gap-2 justify-content-center">
+                  <button class="btn btn-outline-primary" onclick="loadProfile()">My profile</button>
+                  <button class="btn btn-outline-secondary" onclick="loadFeatures()">My features</button>
+                  <button class="btn btn-primary-custom text-white" onclick="refreshAccessToken()">Refresh token</button>
+                  <button class="btn btn-danger" onclick="logout()">Logout</button>
+                </div>
+              </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+
+
+function login() {
+  const username = document.getElementById("username").value.trim();
+  const password = document.getElementById("password").value.trim();
+
+if (username !== "" && password !== "") {
+    document.getElementById("loginSection").classList.add("hidden");
+    document.getElementById("mfaSection").classList.remove("hidden");
+
+  } else {
+    alert("Enter username and password");
+  }
+}
+
+function verifyMFA(){
+
+
+let otp =
+document.getElementById("otp").value;
+
+
+
+if(otp.length === 6){
+
+
+document.getElementById("mfaSection")
+.classList.add("hidden");
+
+
+document.getElementById("dashboard")
+.classList.remove("hidden");
+
+
+}
+
+else{
+
+
+alert("Invalid MFA Code");
+
+
+}
+
+
+
+}
+
+
+</script>
+</body>
+</html>

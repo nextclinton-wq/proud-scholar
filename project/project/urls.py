@@ -17,9 +17,14 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path, re_path
 from django.views.generic.base import RedirectView
+from django.views.generic import TemplateView
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+from app.views import signin_view
 
 urlpatterns = [
+    path('', TemplateView.as_view(template_name='welcome.html'), name='welcome'),
+    # Accept both /signin and /signin/ so POSTs from older pages don't 404
+    path('signin/', signin_view, name='signin'),
     path('admin/auth/user/', RedirectView.as_view(url='/admin/app/user/', permanent=False), name='legacy-admin-user'),
     re_path(r'^admin/auth/user/(?P<path>.*)$', RedirectView.as_view(url='/admin/app/user/%(path)s', permanent=False)),
     path('admin/', admin.site.urls),

@@ -73,12 +73,30 @@ class RefreshTokenSerializer(serializers.Serializer):
 
 
 class MFASetupSerializer(serializers.Serializer):
+    username = serializers.CharField(required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
     password = serializers.CharField(write_only=True)
     device_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
 
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        username = attrs.get("username")
+        email = attrs.get("email")
+        if not username and not email:
+            raise serializers.ValidationError({"username": "Either username or email is required."})
+        return attrs
+
 
 class MFAVerifySerializer(serializers.Serializer):
+    username = serializers.CharField(required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
     code = serializers.CharField(max_length=10)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        username = attrs.get("username")
+        email = attrs.get("email")
+        if not username and not email:
+            raise serializers.ValidationError({"username": "Either username or email is required."})
+        return attrs
 
 
 class PermissionSerializer(serializers.Serializer):
