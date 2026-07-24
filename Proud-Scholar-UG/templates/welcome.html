@@ -288,7 +288,9 @@
                 </div>
                 <a href="#" class="forgot-link">Forgot password?</a>
               </div>
-              <button type="submit" class="btn btn-primary-custom text-white w-100 mb-3">Sign In <i class="bi bi-arrow-right-short ms-1"></i></button>
+              <button id="signinBtn" type="submit" class="btn btn-primary-custom text-white w-100 mb-3">Sign In <i class="bi bi-arrow-right-short ms-1"></i>
+                <span id="signinSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status" aria-hidden="true"></span>
+              </button>
             </form>
             <p class="text-center mt-2 footer-copy"><i class="bi bi-shield-check me-1"></i> Secure · Privacy first</p>
             <div class="d-flex flex-wrap gap-2 justify-content-center">
@@ -308,7 +310,9 @@
               <label class="form-label fw-semibold" style="color:#2b405b; font-size:0.9rem;">Device name</label>
               <input type="text" class="form-control form-control-custom" placeholder="Google Authenticator" id="deviceName" />
             </div>
-            <button id="setupMfaBtn" class="btn btn-primary-custom text-white w-100 mb-3" onclick="setupMFA()">Set up MFA</button>
+            <button id="setupMfaBtn" class="btn btn-primary-custom text-white w-100 mb-3" onclick="setupMFA()">Set up MFA
+              <span id="setupSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status" aria-hidden="true"></span>
+            </button>
             <div id="mfaSetupResult" class="hidden mb-3">
               <div class="text-center mb-2"><img id="qrImage" alt="Authenticator QR code" class="img-thumbnail" style="max-width: 180px;" /></div>
               <div class="small text-muted mb-2" id="otpauthText"></div>
@@ -316,7 +320,9 @@
             </div>
             <p class="text-muted text-center mb-2">Enter the code from your authenticator app</p>
             <input type="text" class="form-control form-control-custom mb-3" placeholder="Enter 6 digit OTP code" id="otp" />
-            <button class="btn btn-success w-100" onclick="verifyMFA()">Verify MFA</button>
+            <button id="verifyMfaBtn" class="btn btn-success w-100" onclick="verifyMFA()">Verify MFA
+              <span id="verifySpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status" aria-hidden="true"></span>
+            </button>
           </div>
 
           <div id="dashboard" class="hidden text-center">
@@ -485,6 +491,7 @@ function login() {
   clearMessage();
   const body = username.includes("@") ? { email: username, password } : { username, password };
   clearPendingMfaUser();
+  setButtonLoading('signinBtn', true);
   apiRequest("/login", { method: "POST", body: JSON.stringify(body) })
     .then((data) => {
       document.getElementById("mfaPassword").value = password;
@@ -512,7 +519,8 @@ function login() {
       showMessage("Login successful. You can now use token actions.", "success");
       renderDashboard(data.user);
     })
-    .catch((error) => showMessage(error.message, "danger"));
+    .catch((error) => showMessage(error.message, "danger"))
+    .finally(() => setButtonLoading('signinBtn', false));
 }
 
 function setupMFA() {
@@ -532,6 +540,7 @@ function setupMFA() {
       payload.email = pendingMfaUser.email;
     }
   }
+  setButtonLoading('setupMfaBtn', true);
   apiRequest("/mfa/setup", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -541,7 +550,8 @@ function setupMFA() {
       showSection("mfaSection");
       showMessage("MFA setup created. Scan the QR code and verify a code.", "success");
     })
-    .catch((error) => showMessage(error.message, "danger"));
+    .catch((error) => showMessage(error.message, "danger"))
+    .finally(() => setButtonLoading('setupMfaBtn', false));
 }
 
 function verifyMFA() {
@@ -560,6 +570,7 @@ function verifyMFA() {
       payload.email = pendingMfaUser.email;
     }
   }
+  setButtonLoading('verifyMfaBtn', true);
   apiRequest("/mfa/verify", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -571,7 +582,21 @@ function verifyMFA() {
         window.location.href = "/static/index.html";
       }, 300);
     })
-    .catch((error) => showMessage(error.message, "danger"));
+    .catch((error) => showMessage(error.message, "danger"))
+    .finally(() => setButtonLoading('verifyMfaBtn', false));
+}
+
+function setButtonLoading(buttonId, loading, idleText) {
+  const btn = document.getElementById(buttonId);
+  if (!btn) return;
+  const spinner = document.getElementById(buttonId.replace('Btn', 'Spinner'));
+  if (loading) {
+    btn.setAttribute('disabled', 'disabled');
+    if (spinner) spinner.classList.remove('d-none');
+  } else {
+    btn.removeAttribute('disabled');
+    if (spinner) spinner.classList.add('d-none');
+  }
 }
 
 async function refreshAccessToken() {
