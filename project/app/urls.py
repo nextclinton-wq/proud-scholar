@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import AuthViewSet
+from .views import AuthViewSet, DashboardViewSet, FeatureActionViewSet, FeatureCategoryViewSet, FeatureItemViewSet, FeatureViewSet, RoleFeatureViewSet
 
 urlpatterns = [
     path("auth/register", AuthViewSet.as_view({"post": "register"}), name="auth-register"),
@@ -11,4 +11,31 @@ urlpatterns = [
     path("auth/mfa/verify", AuthViewSet.as_view({"post": "mfa_verify"}), name="auth-mfa-verify"),
     path("auth/me", AuthViewSet.as_view({"get": "me"}), name="auth-me"),
     path("auth/features", AuthViewSet.as_view({"get": "features"}), name="auth-features"),
+    path("features", FeatureViewSet.as_view({"get": "list", "post": "create"}), name="feature-list"),
+    path("features/<uuid:id>/", FeatureViewSet.as_view({"get": "retrieve", "put": "update", "delete": "destroy"}), name="feature-detail"),
+    path("features/<uuid:id>/items", FeatureViewSet.as_view({"get": "items", "post": "create_item"}), name="feature-items"),
+    path("features/<uuid:id>/actions", FeatureViewSet.as_view({"get": "actions", "post": "create_action"}), name="feature-actions"),
+    path("feature-categories", FeatureCategoryViewSet.as_view({"get": "list", "post": "create"}), name="feature-category-list"),
+    path("feature-categories/<uuid:id>/", FeatureCategoryViewSet.as_view({"put": "update", "delete": "destroy"}), name="feature-category-detail"),
+    path("feature-items/<uuid:id>/", FeatureItemViewSet.as_view({"put": "update", "delete": "destroy"}), name="feature-item-detail"),
+    path("feature-actions/<uuid:id>/", FeatureActionViewSet.as_view({"put": "update", "delete": "destroy"}), name="feature-action-detail"),
+    path("roles/<uuid:role_id>/features", RoleFeatureViewSet.as_view({"get": "list_role_features", "post": "assign"}), name="role-feature-list"),
+    path("roles/<uuid:role_id>/features/<uuid:feature_id>/", RoleFeatureViewSet.as_view({"delete": "remove"}), name="role-feature-remove"),
+    path("roles/<uuid:role_id>/actions", RoleFeatureViewSet.as_view({"post": "assign_action", "get": "list_actions"}), name="role-feature-actions"),
+    path("dashboards/", DashboardViewSet.as_view({"get": "list", "post": "create"}), name="dashboard-list"),
+    path("dashboards/<uuid:id>/", DashboardViewSet.as_view({"get": "retrieve", "put": "update", "delete": "destroy"}), name="dashboard-detail"),
+    path("dashboards/<uuid:id>/assign-feature/", DashboardViewSet.as_view({"post": "assign_feature"}), name="dashboard-assign-feature"),
+    path("dashboards/<uuid:id>/remove-feature/", DashboardViewSet.as_view({"post": "remove_feature"}), name="dashboard-remove-feature"),
+    path("dashboards/<uuid:id>/features/", DashboardViewSet.as_view({"get": "features"}), name="dashboard-features"),
+    path("dashboard/menu/", DashboardViewSet.as_view({"get": "menu"}), name="dashboard-menu"),
+    path("dashboard/payload/", DashboardViewSet.as_view({"get": "payload"}), name="dashboard-payload"),
+    path("dashboard/widgets/", DashboardViewSet.as_view({"get": "list_widgets", "post": "create_widget"}), name="dashboard-widget-list"),
+    path("dashboard/widgets/<uuid:widget_id>/", DashboardViewSet.as_view({"put": "update_widget", "delete": "delete_widget"}), name="dashboard-widget-detail"),
+    path("dashboard/actions/", DashboardViewSet.as_view({"get": "list_quick_actions", "post": "create_quick_action"}), name="dashboard-action-list"),
+    path("dashboard/actions/<uuid:action_id>/", DashboardViewSet.as_view({"put": "update_quick_action", "delete": "delete_quick_action"}), name="dashboard-action-detail"),
+    path("dashboard/statistics/", DashboardViewSet.as_view({"get": "list_statistics", "post": "create_statistic_card"}), name="dashboard-statistic-list"),
+    path("dashboard/statistics/<uuid:card_id>/", DashboardViewSet.as_view({"put": "update_statistic_card", "delete": "delete_statistic_card"}), name="dashboard-statistic-detail"),
+    path("dashboard/banners/", DashboardViewSet.as_view({"get": "list_banners", "post": "create_banner"}), name="dashboard-banner-list"),
+    path("dashboard/banners/<uuid:banner_id>/", DashboardViewSet.as_view({"put": "update_banner", "delete": "delete_banner"}), name="dashboard-banner-detail"),
+    path("dashboard/by-url/<slug:slug>/", DashboardViewSet.as_view({"get": "by_url"}), name="dashboard-by-url"),
 ]

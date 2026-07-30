@@ -8,9 +8,57 @@ from django.contrib.auth.models import AbstractUser
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+from django.utils.text import slugify
+
+from .current_request import get_current_user
 
 
-class BaseModel(models.Model):
+class TenantAwareManager(models.Manager):
+    def for_tenant(self, tenant=None):
+        if tenant is None:
+            current_user = get_current_user()
+            tenant = getattr(current_user, "tenant", None)
+        if tenant is None:
+            return self.none()
+        return self.get_queryset().filter(tenant=str(tenant))
+
+    def active(self):
+        return self.get_queryset().filter(is_active=True, is_deleted=False)
+
+    def inactive(self):
+        return self.get_queryset().filter(is_active=False)
+
+
+class ActiveManager(TenantAwareManager):
+    def get_queryset(self):
+        return super().get_queryset().filter(is_active=True, is_deleted=False)
+
+
+class InactiveManager(TenantAwareManager):
+    def get_queryset(self):
+        return super().get_queryset().filter(is_active=False)
+
+
+class TenantAwareModel(models.Model):
+    objects = TenantAwareManager()
+    active_objects = ActiveManager()
+    inactive_objects = InactiveManager()
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        current_user = get_current_user()
+        if getattr(self, "tenant", None) is None and current_user is not None:
+            self.tenant = current_user.tenant
+        if current_user is not None:
+            if getattr(self, "created_by", None) is None:
+                self.created_by = current_user
+            self.updated_by = current_user
+        super().save(*args, **kwargs)
+
+
+class BaseModel(TenantAwareModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.UUIDField(db_index=True, help_text="Tenant identifier")
     is_active = models.BooleanField(default=True)
@@ -118,6 +166,300 @@ class Role(BaseModel):
         if not self.code:
             self.code = self.name.lower().replace(" ", "_")
         super().save(*args, **kwargs)
+
+
+class FeatureCategory(BaseModel):
+    name = models.CharField(max_length=100)
+    code = models.SlugField(max_length=100, blank=True)
+    description = models.TextField(blank=True)
+    icon = models.CharField(max_length=50, default="circle")
+    display_order = models.PositiveIntegerField(default=0)
+    is_system = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "app_feature_category"
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "code"], name="unique_feature_category_code_per_tenant"),
+            models.UniqueConstraint(fields=["tenant", "name"], name="unique_feature_category_name_per_tenant"),
+        ]
+        ordering = ["display_order", "name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+    def save(self, *args, **kwargs) -> None:
+        if not self.code:
+            self.code = slugify(self.name)
+        super().save(*args, **kwargs)
+
+
+class Feature(BaseModel):
+    feature_category = models.ForeignKey(FeatureCategory, null=True, blank=True, on_delete=models.SET_NULL, related_name="features")
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(max_length=100, blank=True)
+    code = models.SlugField(max_length=100, blank=True)
+    description = models.TextField(blank=True)
+    icon = models.CharField(max_length=50, default="circle")
+    route = models.CharField(max_length=255, blank=True)
+    api_base_url = models.CharField(max_length=255, blank=True)
+    display_order = models.PositiveIntegerField(default=0)
+    feature_type = models.CharField(
+        max_length=20,
+        choices=[
+            ("MENU", "Menu"),
+            ("PAGE", "Page"),
+            ("ACTION", "Action"),
+            ("REPORT", "Report"),
+            ("DASHBOARD", "Dashboard"),
+            ("WIDGET", "Widget"),
+            ("API", "Api"),
+        ],
+        default="MENU",
+    )
+    category = models.CharField(max_length=100, blank=True)
+    is_visible = models.BooleanField(default=True)
+    is_assignable = models.BooleanField(default=True)
+    is_system = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = "app_feature"
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "code"], name="unique_feature_code_per_tenant"),
+            models.UniqueConstraint(fields=["tenant", "slug"], name="unique_feature_slug_per_tenant"),
+        ]
+        ordering = ["display_order", "name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+    def save(self, *args, **kwargs) -> None:
+        if not self.slug:
+            self.slug = slugify(self.name)
+        if not self.code:
+            self.code = self.slug
+        super().save(*args, **kwargs)
+
+
+class FeatureItem(BaseModel):
+    feature = models.ForeignKey(Feature, on_delete=models.CASCADE, related_name="feature_items")
+    title = models.CharField(max_length=100)
+    route = models.CharField(max_length=255, blank=True)
+    icon = models.CharField(max_length=50, default="circle")
+    display_order = models.PositiveIntegerField(default=0)
+    parent_item = models.ForeignKey("self", null=True, blank=True, on_delete=models.SET_NULL, related_name="children")
+    badge = models.CharField(max_length=50, blank=True)
+    opens_in_new_tab = models.BooleanField(default=False)
+    permission_code = models.CharField(max_length=100, blank=True)
+    is_visible = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "app_feature_item"
+        ordering = ["display_order", "title"]
+
+    def __str__(self) -> str:
+        return self.title
+
+
+class FeatureAction(BaseModel):
+    feature = models.ForeignKey(Feature, on_delete=models.CASCADE, related_name="feature_actions")
+    name = models.CharField(max_length=100)
+    code = models.SlugField(max_length=100, blank=True)
+    http_method = models.CharField(max_length=10, default="POST")
+    endpoint = models.CharField(max_length=255, blank=True)
+    permission_code = models.CharField(max_length=100, blank=True)
+    description = models.TextField(blank=True)
+
+    class Meta:
+        db_table = "app_feature_action"
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "feature", "code"], name="unique_feature_action_code_per_tenant_feature"),
+        ]
+        ordering = ["feature__name", "name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+    def save(self, *args, **kwargs) -> None:
+        if not self.code:
+            self.code = slugify(self.name)
+        super().save(*args, **kwargs)
+
+
+class RoleFeature(BaseModel):
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="role_features")
+    feature = models.ForeignKey(Feature, on_delete=models.CASCADE, related_name="role_features")
+    enabled = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "app_role_feature"
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "role", "feature"], name="unique_role_feature_assignment_per_tenant")
+        ]
+        ordering = ["role__name", "feature__name"]
+
+    def __str__(self) -> str:
+        return f"{self.role.name} -> {self.feature.name}"
+
+
+class RoleFeatureAction(BaseModel):
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="role_feature_actions")
+    feature_action = models.ForeignKey(FeatureAction, on_delete=models.CASCADE, related_name="role_feature_actions")
+    enabled = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "app_role_feature_action"
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "role", "feature_action"], name="unique_role_feature_action_assignment_per_tenant")
+        ]
+        ordering = ["role__name", "feature_action__name"]
+
+    def __str__(self) -> str:
+        return f"{self.role.name} -> {self.feature_action.name}"
+
+
+class Dashboard(BaseModel):
+    role = models.OneToOneField(Role, on_delete=models.CASCADE, related_name="dashboard")
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(max_length=100, blank=True)
+    url = models.CharField(max_length=255, blank=True)
+    description = models.TextField(blank=True)
+    logo = models.CharField(max_length=255, blank=True)
+    theme = models.CharField(max_length=50, blank=True)
+    home_route = models.CharField(max_length=255, blank=True)
+    default_layout = models.CharField(max_length=100, blank=True)
+    is_default = models.BooleanField(default=False)
+    features = models.ManyToManyField(Feature, through="DashboardFeature", related_name="dashboards")
+
+    class Meta:
+        db_table = "app_dashboard"
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "slug"], name="unique_dashboard_slug_per_tenant")
+        ]
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+    def save(self, *args, **kwargs) -> None:
+        if not self.slug:
+            self.slug = slugify(self.name)
+        if not self.url:
+            self.url = f"/dashboard/{self.slug}/"
+        super().save(*args, **kwargs)
+
+
+class DashboardFeature(BaseModel):
+    dashboard = models.ForeignKey(Dashboard, on_delete=models.CASCADE, related_name="dashboard_features")
+    feature = models.ForeignKey(Feature, on_delete=models.CASCADE, related_name="dashboard_features")
+
+    class Meta:
+        db_table = "app_dashboard_feature"
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "dashboard", "feature"], name="unique_dashboard_feature_per_tenant")
+        ]
+        ordering = ["dashboard__name", "feature__name"]
+
+    def __str__(self) -> str:
+        return f"{self.dashboard.name} -> {self.feature.name}"
+
+
+class DashboardWidget(BaseModel):
+    dashboard = models.ForeignKey(Dashboard, on_delete=models.CASCADE, related_name="widgets")
+    title = models.CharField(max_length=100)
+    widget_type = models.CharField(max_length=100)
+    feature = models.ForeignKey(Feature, null=True, blank=True, on_delete=models.SET_NULL, related_name="widgets")
+    display_order = models.PositiveIntegerField(default=0)
+    width = models.PositiveIntegerField(default=1)
+    height = models.PositiveIntegerField(default=1)
+    configuration = models.JSONField(default=dict, blank=True)
+    is_visible = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "app_dashboard_widget"
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "dashboard", "title"], name="unique_dashboard_widget_title_per_tenant")
+        ]
+        ordering = ["dashboard__name", "display_order", "title"]
+
+    def __str__(self) -> str:
+        return f"{self.dashboard.name} -> {self.title}"
+
+
+class DashboardQuickAction(BaseModel):
+    dashboard = models.ForeignKey(Dashboard, on_delete=models.CASCADE, related_name="quick_actions")
+    feature_action = models.ForeignKey(FeatureAction, on_delete=models.CASCADE, related_name="quick_actions")
+    display_order = models.PositiveIntegerField(default=0)
+    icon = models.CharField(max_length=50, blank=True)
+    color = models.CharField(max_length=30, blank=True)
+
+    class Meta:
+        db_table = "app_dashboard_quick_action"
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "dashboard", "feature_action"], name="unique_dashboard_quick_action_per_tenant")
+        ]
+        ordering = ["dashboard__name", "display_order"]
+
+    def __str__(self) -> str:
+        return f"{self.dashboard.name} -> {self.feature_action.name}"
+
+
+class DashboardStatisticCard(BaseModel):
+    dashboard = models.ForeignKey(Dashboard, on_delete=models.CASCADE, related_name="statistic_cards")
+    title = models.CharField(max_length=100)
+    feature = models.ForeignKey(Feature, null=True, blank=True, on_delete=models.SET_NULL, related_name="statistic_cards")
+    api_endpoint = models.CharField(max_length=255, blank=True)
+    icon = models.CharField(max_length=50, blank=True)
+    display_order = models.PositiveIntegerField(default=0)
+    refresh_interval = models.PositiveIntegerField(default=60)
+
+    class Meta:
+        db_table = "app_dashboard_statistic_card"
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "dashboard", "title"], name="unique_dashboard_statistic_card_title_per_tenant")
+        ]
+        ordering = ["dashboard__name", "display_order", "title"]
+
+    def __str__(self) -> str:
+        return f"{self.dashboard.name} -> {self.title}"
+
+
+class DashboardBanner(BaseModel):
+    dashboard = models.ForeignKey(Dashboard, on_delete=models.CASCADE, related_name="banners")
+    title = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    image = models.CharField(max_length=255, blank=True)
+    button_text = models.CharField(max_length=100, blank=True)
+    button_route = models.CharField(max_length=255, blank=True)
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = "app_dashboard_banner"
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "dashboard", "title"], name="unique_dashboard_banner_title_per_tenant")
+        ]
+        ordering = ["dashboard__name", "display_order", "title"]
+
+    def __str__(self) -> str:
+        return f"{self.dashboard.name} -> {self.title}"
+
+
+class DashboardRoute(BaseModel):
+    dashboard = models.ForeignKey(Dashboard, on_delete=models.CASCADE, related_name="dashboard_routes")
+    name = models.CharField(max_length=100)
+    route = models.CharField(max_length=255)
+    icon = models.CharField(max_length=50, blank=True)
+    sort_order = models.PositiveIntegerField(default=0)
+    is_visible = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "app_dashboard_route"
+        constraints = [
+            models.UniqueConstraint(fields=["tenant", "dashboard", "route"], name="unique_dashboard_route_per_tenant")
+        ]
+        ordering = ["dashboard__name", "sort_order", "name"]
+
+    def __str__(self) -> str:
+        return f"{self.dashboard.name} -> {self.name}"
 
 
 class RolePermission(BaseModel):

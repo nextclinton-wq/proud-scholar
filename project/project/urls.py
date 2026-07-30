@@ -23,6 +23,9 @@ from app.views import signin_view
 
 urlpatterns = [
     path('', TemplateView.as_view(template_name='welcome.html'), name='welcome'),
+    path('welcome/', TemplateView.as_view(template_name='welcome.html'), name='welcome-page'),
+    path('dashboard/', TemplateView.as_view(template_name='index.html'), name='dashboard-home'),
+    re_path(r'^dashboard/(?P<slug>[\w-]+)/?$', TemplateView.as_view(template_name='index.html'), name='dashboard-slug'),
     # Accept both /signin and /signin/ so POSTs from older pages don't 404
     path('signin/', signin_view, name='signin'),
     path('admin/auth/user/', RedirectView.as_view(url='/admin/app/user/', permanent=False), name='legacy-admin-user'),
