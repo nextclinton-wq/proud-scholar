@@ -619,6 +619,85 @@ button {
   gap: 22px;
 }
 
+.settings-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.settings-card {
+  padding: 24px;
+}
+
+.settings-form {
+  display: grid;
+  gap: 16px;
+}
+
+.avatar-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.avatar.large {
+  width: 84px;
+  height: 84px;
+}
+
+.file-field {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.file-field input {
+  border: 1px dashed var(--border);
+  border-radius: 14px;
+  padding: 10px;
+  background: var(--surface-alt);
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+
+.toggle-row input {
+  width: 18px;
+  height: 18px;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.feedback-message {
+  min-height: 24px;
+  color: var(--muted);
+}
+
+.feedback-message.success {
+  color: var(--green);
+}
+
+.feedback-message.error {
+  color: #dc2626;
+}
+
+.badge {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: var(--surface-alt);
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid var(--border);

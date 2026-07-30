@@ -103,6 +103,8 @@ class User(AbstractUser):
     lockout_until = models.DateTimeField(null=True, blank=True)
     password_last_changed_at = models.DateTimeField(null=True, blank=True)
     password_history = models.JSONField(default=list, blank=True)
+    avatar = models.CharField(max_length=500, blank=True, default="")
+    notifications_enabled = models.BooleanField(default=True)
 
     class Meta:
         db_table = "app_user"

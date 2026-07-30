@@ -11,7 +11,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from app.current_request import clear_current_request, set_current_request
-from app.models import Dashboard, Feature, FeatureAction, FeatureCategory, FeatureItem, Role, RoleFeature, RoleFeatureAction, UserRole
+from app.models import Dashboard, Feature, FeatureAction, FeatureCategory, FeatureItem, MFAMethod, Role, RoleFeature, RoleFeatureAction, UserRole
 
 User = get_user_model()
 
@@ -383,3 +383,46 @@ class AuthAPITests(APITestCase):
         invalid_response = self.client.post(self.mfa_verify_url, {"username": "totpuser", "code": invalid_code}, format="json")
         self.assertEqual(invalid_response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(invalid_response.data["success"])
+
+    def test_profile_settings_endpoints_update_profile_and_preferences(self):
+        user = User.objects.create_user(
+            username="settingsuser",
+            email="settings@example.com",
+            password="StrongPass123!",
+            tenant="d1c3e8d0-2a97-4d8c-a1bd-1d654fce6b16",
+        )
+        MFAMethod.objects.create(user=user, tenant=str(user.tenant), secret="SECRET123456", is_enabled=True, device_name="Google Pixel")
+        self.client.force_authenticate(user=user)
+
+        profile_response = self.client.post(
+            reverse("profile-update"),
+            {"first_name": "Ada", "last_name": "Lovelace", "notifications_enabled": False},
+            format="json",
+        )
+        self.assertEqual(profile_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(profile_response.data["success"])
+        self.assertEqual(profile_response.data["data"]["first_name"], "Ada")
+        self.assertFalse(profile_response.data["data"]["notifications_enabled"])
+
+        password_response = self.client.post(
+            reverse("password-change"),
+            {"current_password": "StrongPass123!", "new_password": "NewStrongPass456!", "new_password_confirm": "NewStrongPass456!"},
+            format="json",
+        )
+        self.assertEqual(password_response.status_code, status.HTTP_200_OK)
+
+        preferences_response = self.client.post(
+            reverse("preferences-update"),
+            {"notifications_enabled": True},
+            format="json",
+        )
+        self.assertEqual(preferences_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(preferences_response.data["data"]["notifications_enabled"])
+
+        disable_response = self.client.post(
+            reverse("mfa-disable"),
+            {"password": "NewStrongPass456!"},
+            format="json",
+        )
+        self.assertEqual(disable_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(disable_response.data["data"]["mfa_enabled"])

@@ -66,6 +66,36 @@ class LoginSerializer(serializers.Serializer):
         return attrs
 
 
+class ProfileUpdateSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    notifications_enabled = serializers.BooleanField(required=False)
+    avatar = serializers.FileField(required=False, allow_empty_file=True)
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True, min_length=8)
+    new_password_confirm = serializers.CharField(write_only=True, min_length=8)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        new_password = attrs.get("new_password")
+        new_password_confirm = attrs.get("new_password_confirm")
+        if new_password and new_password_confirm and new_password != new_password_confirm:
+            raise serializers.ValidationError({"new_password_confirm": "Passwords do not match."})
+        return attrs
+
+
+class NotificationPreferencesSerializer(serializers.Serializer):
+    notifications_enabled = serializers.BooleanField()
+
+
+class MfaDisableSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True)
+
+
 class LogoutSerializer(serializers.Serializer):
     refresh_token = serializers.CharField()
 

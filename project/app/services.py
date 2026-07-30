@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import os
 import secrets
 import struct
 import string
@@ -12,9 +13,11 @@ from datetime import timedelta
 from typing import Any
 
 from django.conf import settings
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, password_validation
 from django.contrib.auth.hashers import make_password, check_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
@@ -1225,6 +1228,69 @@ class AuthService:
         self._log_audit(user=user, action="login", details={"status": "success"}, actor=user, request=request)
         return self._issue_tokens(user, actor=user, request=request)
 
+    def _serialize_profile(self, user: User) -> dict[str, Any]:
+        mfa_method = MFAMethod.objects.filter(user=user, is_deleted=False).first()
+        return {
+            "id": str(user.id),
+            "username": user.username,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "tenant": str(user.tenant) if user.tenant is not None else None,
+            "avatar": user.avatar or "",
+            "notifications_enabled": getattr(user, "notifications_enabled", True),
+            "mfa_enabled": bool(mfa_method and getattr(mfa_method, "is_enabled", False)),
+        }
+
+    def update_profile(self, user: User, data: dict[str, Any], avatar_file=None) -> dict[str, Any]:
+        if data.get("email") and data["email"] != user.email and User.objects.filter(email=data["email"], is_deleted=False).exclude(pk=user.pk).exists():
+            raise exceptions.ValidationError("A user with that email already exists.")
+        if data.get("username") and data["username"] != user.username and User.objects.filter(username=data["username"], is_deleted=False).exclude(pk=user.pk).exists():
+            raise exceptions.ValidationError("A user with that username already exists.")
+
+        if data.get("username"):
+            user.username = data["username"]
+        if "email" in data:
+            user.email = data["email"]
+        if "first_name" in data:
+            user.first_name = data.get("first_name", "")
+        if "last_name" in data:
+            user.last_name = data.get("last_name", "")
+        if "notifications_enabled" in data:
+            user.notifications_enabled = bool(data["notifications_enabled"])
+        if avatar_file is not None:
+            user.avatar = self._store_avatar(user, avatar_file)
+        user.save(update_fields=["username", "email", "first_name", "last_name", "avatar", "notifications_enabled"])
+        self._log_audit(user=user, action="profile_update", details={"updated_fields": sorted([key for key in data.keys() if key not in {"avatar"}])}, actor=user)
+        return self._serialize_profile(user)
+
+    def change_password(self, user: User, current_password: str, new_password: str) -> dict[str, Any]:
+        if not check_password(current_password, user.password):
+            raise exceptions.AuthenticationFailed("Current password is incorrect.")
+        password_validation.validate_password(new_password)
+        user.set_password(new_password)
+        user.password_last_changed_at = timezone.now()
+        user.password_history = [self._hash_password(new_password)] + (user.password_history or [])[:4]
+        user.save(update_fields=["password", "password_last_changed_at", "password_history"])
+        self._log_audit(user=user, action="password_change", details={"status": "success"}, actor=user)
+        return {"message": "Password updated successfully."}
+
+    def set_notification_preferences(self, user: User, notifications_enabled: bool) -> dict[str, Any]:
+        user.notifications_enabled = bool(notifications_enabled)
+        user.save(update_fields=["notifications_enabled"])
+        self._log_audit(user=user, action="notification_preferences_update", details={"notifications_enabled": bool(notifications_enabled)}, actor=user)
+        return self._serialize_profile(user)
+
+    def disable_mfa(self, user: User, password: str) -> dict[str, Any]:
+        if not check_password(password, user.password):
+            raise exceptions.AuthenticationFailed("Current password is incorrect.")
+        method = MFAMethod.objects.filter(user=user, is_deleted=False).first()
+        if method is not None:
+            method.is_enabled = False
+            method.save(update_fields=["is_enabled", "updated_at"])
+        self._log_audit(user=user, action="mfa_disable", details={"status": "success"}, actor=user)
+        return self._serialize_profile(user)
+
     def logout_user(self, refresh_token_value: str, user: User, request=None) -> dict[str, Any]:
         token_model = self._get_valid_refresh_token(refresh_token_value, user=user)
         token_model.revoke()
@@ -1394,6 +1460,13 @@ class AuthService:
 
     def _hash_password(self, password: str) -> str:
         return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+    def _store_avatar(self, user: User, avatar_file) -> str:
+        file_name = os.path.basename(getattr(avatar_file, "name", "avatar.png") or "avatar.png")
+        extension = os.path.splitext(file_name)[1] or ".png"
+        safe_name = f"{user.id}_{uuid.uuid4().hex}{extension}"
+        path = default_storage.save(f"avatars/{safe_name}", ContentFile(avatar_file.read()))
+        return default_storage.url(path)
 
     def _hash_token(self, token: str) -> str:
         return hashlib.sha256(token.encode("utf-8")).hexdigest()

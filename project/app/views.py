@@ -18,6 +18,7 @@ from .models import Dashboard, Feature, FeatureAction, FeatureCategory, FeatureI
 from .permissions import FeaturePermission, IsSystemAdmin
 from .serializers import (
     AssignFeatureSerializer,
+    ChangePasswordSerializer,
     DashboardBannerRequestSerializer,
     DashboardCreateSerializer,
     DashboardQuickActionRequestSerializer,
@@ -32,7 +33,10 @@ from .serializers import (
     LoginSerializer,
     LogoutSerializer,
     MFASetupSerializer,
+    MfaDisableSerializer,
     MFAVerifySerializer,
+    NotificationPreferencesSerializer,
+    ProfileUpdateSerializer,
     RefreshTokenSerializer,
     RegisterSerializer,
     RoleFeatureAssignSerializer,
@@ -733,7 +737,52 @@ class AuthViewSet(APIResponseMixin, viewsets.ViewSet):
 
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated], url_path="me")
     def me(self, request):
-        return self.success_response({"id": str(request.user.id), "username": request.user.username, "email": request.user.email, "tenant": str(request.user.tenant)}, "Profile loaded.", status.HTTP_200_OK)
+        return self.success_response(AuthService(request=request)._serialize_profile(request.user), "Profile loaded.", status.HTTP_200_OK)
+
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated], url_path="profile/update", name="profile-update")
+    def profile_update(self, request):
+        serializer = ProfileUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return self.error_response("Validation failed.", serializer.errors, status.HTTP_400_BAD_REQUEST)
+        try:
+            avatar_file = request.FILES.get("avatar") if hasattr(request, "FILES") else None
+            result = AuthService(request=request).update_profile(request.user, serializer.validated_data, avatar_file=avatar_file)
+            return self.success_response(result, "Profile updated successfully.", status.HTTP_200_OK)
+        except Exception as exc:
+            return self.error_response(str(exc), [str(exc)], status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated], url_path="password/change", name="password-change")
+    def password_change(self, request):
+        serializer = ChangePasswordSerializer(data=request.data)
+        if not serializer.is_valid():
+            return self.error_response("Validation failed.", serializer.errors, status.HTTP_400_BAD_REQUEST)
+        try:
+            result = AuthService(request=request).change_password(request.user, serializer.validated_data["current_password"], serializer.validated_data["new_password"])
+            return self.success_response(result, "Password updated successfully.", status.HTTP_200_OK)
+        except Exception as exc:
+            return self.error_response(str(exc), [str(exc)], status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated], url_path="preferences", name="preferences-update")
+    def preferences(self, request):
+        serializer = NotificationPreferencesSerializer(data=request.data)
+        if not serializer.is_valid():
+            return self.error_response("Validation failed.", serializer.errors, status.HTTP_400_BAD_REQUEST)
+        try:
+            result = AuthService(request=request).set_notification_preferences(request.user, serializer.validated_data["notifications_enabled"])
+            return self.success_response(result, "Preferences updated successfully.", status.HTTP_200_OK)
+        except Exception as exc:
+            return self.error_response(str(exc), [str(exc)], status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=["post"], permission_classes=[IsAuthenticated], url_path="mfa/disable", name="mfa-disable")
+    def mfa_disable(self, request):
+        serializer = MfaDisableSerializer(data=request.data)
+        if not serializer.is_valid():
+            return self.error_response("Validation failed.", serializer.errors, status.HTTP_400_BAD_REQUEST)
+        try:
+            result = AuthService(request=request).disable_mfa(request.user, serializer.validated_data["password"])
+            return self.success_response(result, "MFA disabled successfully.", status.HTTP_200_OK)
+        except Exception as exc:
+            return self.error_response(str(exc), [str(exc)], status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated, FeaturePermission], url_path="features")
     def features(self, request):
