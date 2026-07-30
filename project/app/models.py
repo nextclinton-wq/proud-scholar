@@ -554,6 +554,8 @@ class MFAMethod(BaseModel):
     is_enabled = models.BooleanField(default=False)
     recovery_codes = models.JSONField(default=list, blank=True)
     last_verified_at = models.DateTimeField(null=True, blank=True)
+    device_name = models.CharField(max_length=255, blank=True, default="phone")
+    authenticator_app = models.CharField(max_length=255, blank=True, default="Google Authenticator")
 
     class Meta:
         db_table = "app_mfa_method"

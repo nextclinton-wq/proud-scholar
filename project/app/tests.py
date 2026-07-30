@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import hmac
 import struct
@@ -361,9 +362,12 @@ class AuthAPITests(APITestCase):
         secret = setup_response.data["data"]["secret"]
 
         def generate_totp(secret_value: str, current_time: int | None = None) -> str:
+            normalized_secret = secret_value.strip().upper()
+            padding = "=" * ((8 - len(normalized_secret) % 8) % 8)
+            key = base64.b32decode(normalized_secret + padding, casefold=True)
             timestamp = current_time if current_time is not None else int(time.time() // 30)
             msg = struct.pack(">Q", timestamp)
-            digest = hmac.new(secret_value.encode("utf-8"), msg, hashlib.sha1).digest()
+            digest = hmac.new(key, msg, hashlib.sha1).digest()
             offset = digest[-1] & 0x0F
             binary = struct.unpack(">I", digest[offset: offset + 4])[0] & 0x7FFFFFFF
             otp = binary % 10**6

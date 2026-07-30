@@ -293,15 +293,53 @@
               </button>
             </form>
             <p class="text-center mt-2 footer-copy"><i class="bi bi-shield-check me-1"></i> Secure · Privacy first</p>
-            <div class="d-flex flex-wrap gap-2 justify-content-center">
+            <div class="d-flex flex-wrap gap-2 justify-content-center mb-2">
               <button type="button" class="btn btn-outline-secondary btn-sm" onclick="refreshAccessToken()">Refresh token</button>
               <button type="button" class="btn btn-outline-secondary btn-sm" onclick="loadProfile()">Load profile</button>
+            </div>
+            <div class="text-center">
+              <button type="button" class="btn btn-link p-0 signup-link" onclick="showRegisterSection()">Create an account</button>
+            </div>
+          </div>
+
+          <div id="registerSection" class="hidden">
+            <div class="mb-4">
+              <h3 class="fw-bold section-heading">Create your account</h3>
+              <p class="section-copy">Register and start using the dashboard</p>
+            </div>
+            <form onsubmit="event.preventDefault(); register();">
+              <div class="mb-3">
+                <label class="form-label fw-semibold" style="color:#2b405b; font-size:0.9rem;">Full name</label>
+                <input id="registerFirstName" type="text" class="form-control form-control-custom" placeholder="Enter your full name" />
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold" style="color:#2b405b; font-size:0.9rem;">Username</label>
+                <input id="registerUsername" type="text" class="form-control form-control-custom" placeholder="Choose a username" />
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold" style="color:#2b405b; font-size:0.9rem;">Email</label>
+                <input id="registerEmail" type="email" class="form-control form-control-custom" placeholder="Enter your email" />
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold" style="color:#2b405b; font-size:0.9rem;">Password</label>
+                <input id="registerPassword" type="password" class="form-control form-control-custom" placeholder="Create a password" />
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold" style="color:#2b405b; font-size:0.9rem;">Confirm password</label>
+                <input id="registerPasswordConfirm" type="password" class="form-control form-control-custom" placeholder="Confirm your password" />
+              </div>
+              <button id="registerBtn" type="submit" class="btn btn-primary-custom text-white w-100 mb-3">Register <i class="bi bi-person-plus-fill ms-1"></i>
+                <span id="registerSpinner" class="spinner-border spinner-border-sm ms-2 d-none" role="status" aria-hidden="true"></span>
+              </button>
+            </form>
+            <div class="text-center">
+              <button type="button" class="btn btn-link p-0 signup-link" onclick="showLoginSection()">Already have an account? Sign in</button>
             </div>
           </div>
 
           <div id="mfaSection" class="hidden">
             <h4 class="text-center">Multi-Factor Authentication</h4>
-            <p class="text-muted text-center mb-3">Set up MFA first, then verify the code from your authenticator app.</p>
+            <p id="mfaInstructions" class="text-muted text-center mb-3">Set up MFA first, then verify the code from your authenticator app.</p>
             <div class="mb-3" id="mfaPasswordWrap">
               <label class="form-label fw-semibold" style="color:#2b405b; font-size:0.9rem;">Password</label>
               <input type="password" class="form-control form-control-custom" placeholder="Confirm your password" id="mfaPassword" />
@@ -427,9 +465,19 @@ async function apiRequest(path, options = {}) {
 }
 
 function showSection(sectionId) {
-  ["loginSection", "mfaSection", "dashboard"].forEach((id) => {
+  ["loginSection", "registerSection", "mfaSection", "dashboard"].forEach((id) => {
     document.getElementById(id).classList.toggle("hidden", id !== sectionId);
   });
+}
+
+function showRegisterSection() {
+  showSection("registerSection");
+  clearMessage();
+}
+
+function showLoginSection() {
+  showSection("loginSection");
+  clearMessage();
 }
 
 function renderDashboard(user) {
@@ -437,10 +485,18 @@ function renderDashboard(user) {
   window.location.href = "/static/index.html";
 }
 
+function renderMfaInstructions(message) {
+  const el = document.getElementById("mfaInstructions");
+  if (el) {
+    el.textContent = message || "Scan the QR code with Google Authenticator or another authenticator app, then enter the 6-digit code shown on your phone.";
+  }
+}
+
 function renderMfaSetup(data) {
   document.getElementById("mfaSetupResult").classList.remove("hidden");
   document.getElementById("qrImage").src = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(data.otpauth_url)}`;
   document.getElementById("otpauthText").textContent = data.otpauth_url || "";
+  renderMfaInstructions(data.otp_instructions || "Scan the QR code with Google Authenticator or another authenticator app, then enter the 6-digit code shown on your phone.");
   const codesEl = document.getElementById("recoveryCodes");
   if (data.recovery_codes && data.recovery_codes.length) {
     codesEl.innerHTML = `<strong>Recovery codes</strong><br>${(data.recovery_codes || []).join("<br>")}`;
@@ -480,6 +536,45 @@ function configureMfaUI(mfaRequired, mfaSetupRequired) {
   }
 }
 
+function register() {
+  const username = document.getElementById("registerUsername").value.trim();
+  const email = document.getElementById("registerEmail").value.trim();
+  const password = document.getElementById("registerPassword").value;
+  const passwordConfirm = document.getElementById("registerPasswordConfirm").value;
+  const firstName = document.getElementById("registerFirstName").value.trim();
+
+  if (!username || !email || !password || !passwordConfirm) {
+    showMessage("Please fill in all registration fields.", "warning");
+    return;
+  }
+  if (password !== passwordConfirm) {
+    showMessage("Passwords do not match.", "warning");
+    return;
+  }
+  clearMessage();
+  setButtonLoading('registerBtn', true);
+  apiRequest("/register", {
+    method: "POST",
+    body: JSON.stringify({
+      username,
+      email,
+      password,
+      password_confirm: passwordConfirm,
+      first_name: firstName,
+      role_names: []
+    }),
+  })
+    .then((data) => {
+      storeAuth(data);
+      showMessage("Account created successfully. Redirecting to dashboard...", "success");
+      setTimeout(() => {
+        window.location.href = "/static/index.html";
+      }, 300);
+    })
+    .catch((error) => showMessage(error.message, "danger"))
+    .finally(() => setButtonLoading('registerBtn', false));
+}
+
 function login() {
   clearAuth();
   const username = document.getElementById("username").value.trim();
@@ -507,8 +602,10 @@ function login() {
             configureMfaUI(!!data.mfa_required, !!data.mfa_setup_required);
             showSection("mfaSection");
             if (data.mfa_required) {
+              renderMfaInstructions(data.otp_instructions || "Check your phone for the 6-digit code in your authenticator app.");
               showMessage("MFA verification required. Enter your authenticator code.", "info");
             } else {
+              renderMfaInstructions(data.otp_instructions || "Scan the QR code with Google Authenticator or another authenticator app, then enter the 6-digit code shown on your phone.");
               showMessage("MFA setup required. Confirm your password and set up your authenticator.", "info");
             }
         return;

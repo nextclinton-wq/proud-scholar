@@ -53,11 +53,13 @@ def _build_mfa_login_payload(user):
         "tenant": str(user.tenant) if user.tenant is not None else None,
     }
     if mfa:
+        device_name = getattr(mfa, "device_name", "") or "phone"
+        authenticator_app = getattr(mfa, "authenticator_app", "") or "Google Authenticator"
         return (
             {
                 "mfa_required": True,
                 "user": user_info,
-                "otp_instructions": "Check your phone for the 6-digit code in your authenticator app.",
+                "otp_instructions": f"Check your {device_name} for the 6-digit code in {authenticator_app}.",
             },
             "MFA verification required.",
         )
