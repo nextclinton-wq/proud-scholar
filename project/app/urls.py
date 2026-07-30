@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import AuthViewSet, DashboardViewSet, FeatureActionViewSet, FeatureCategoryViewSet, FeatureItemViewSet, FeatureViewSet, RoleFeatureViewSet
+from .views import AuthViewSet, DashboardViewSet, FeatureActionViewSet, FeatureCategoryViewSet, FeatureItemViewSet, FeatureViewSet, RoleFeatureViewSet, StaffManagementViewSet
 
 urlpatterns = [
     path("auth/register", AuthViewSet.as_view({"post": "register"}), name="auth-register"),
@@ -15,6 +15,10 @@ urlpatterns = [
     path("auth/preferences", AuthViewSet.as_view({"post": "preferences"}), name="preferences-update"),
     path("auth/mfa/disable", AuthViewSet.as_view({"post": "mfa_disable"}), name="mfa-disable"),
     path("auth/features", AuthViewSet.as_view({"get": "features"}), name="auth-features"),
+    path("staff/", StaffManagementViewSet.as_view({"get": "list", "post": "create"}), name="staff-list"),
+    path("staff/<uuid:user_id>/", StaffManagementViewSet.as_view({"put": "update"}), name="staff-detail"),
+    path("staff/<uuid:user_id>/block/", StaffManagementViewSet.as_view({"post": "block"}), name="staff-block"),
+    path("staff/<uuid:user_id>/reset-password/", StaffManagementViewSet.as_view({"post": "reset_password"}), name="staff-reset-password"),
     path("features", FeatureViewSet.as_view({"get": "list", "post": "create"}), name="feature-list"),
     path("features/<uuid:id>/", FeatureViewSet.as_view({"get": "retrieve", "put": "update", "delete": "destroy"}), name="feature-detail"),
     path("features/<uuid:id>/items", FeatureViewSet.as_view({"get": "items", "post": "create_item"}), name="feature-items"),

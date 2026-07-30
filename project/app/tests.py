@@ -5,8 +5,9 @@ import struct
 import time
 
 from django.contrib.auth import get_user_model
+from django.core import mail
+from django.test import RequestFactory, override_settings
 from django.urls import reverse
-from django.test import RequestFactory
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -137,6 +138,60 @@ class TenantAwareModelTests(APITestCase):
         inactive_features = Feature.inactive_objects.for_tenant(tenant_id)
         self.assertIn(inactive_feature, list(inactive_features))
         self.assertNotIn(active_feature, list(inactive_features))
+
+
+class StaffManagementAPITests(APITestCase):
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_staff_management_flow_lists_creates_updates_blocks_and_resets_password(self):
+        admin = User.objects.create_user(
+            username="staffadmin",
+            email="staffadmin@example.com",
+            password="StrongPass123!",
+            tenant="66666666-6666-6666-6666-666666666666",
+            is_staff=True,
+        )
+        self.client.force_authenticate(user=admin)
+
+        create_response = self.client.post(
+            reverse("staff-list"),
+            {
+                "username": "juniorstaff",
+                "email": "juniorstaff@example.com",
+                "password": "StrongPass123!",
+                "password_confirm": "StrongPass123!",
+                "first_name": "Jane",
+                "last_name": "Doe",
+                "department": "Finance",
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(create_response.data["success"])
+        staff_id = create_response.data["data"]["id"]
+
+        list_response = self.client.get(reverse("staff-list"), format="json")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(list_response.data["data"]), 1)
+
+        update_response = self.client.put(
+            reverse("staff-detail", kwargs={"user_id": staff_id}),
+            {"first_name": "Janet", "last_name": "Smith", "department": "Accounts"},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(update_response.data["data"]["department"], "Accounts")
+
+        block_response = self.client.post(
+            reverse("staff-block", kwargs={"user_id": staff_id}),
+            {"blocked": True},
+            format="json",
+        )
+        self.assertEqual(block_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(block_response.data["data"]["is_active"])
+
+        reset_response = self.client.post(reverse("staff-reset-password", kwargs={"user_id": staff_id}), format="json")
+        self.assertEqual(reset_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 1)
 
 
 class FeatureFrameworkAPITests(APITestCase):

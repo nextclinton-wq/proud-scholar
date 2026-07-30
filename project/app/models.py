@@ -105,6 +105,7 @@ class User(AbstractUser):
     password_history = models.JSONField(default=list, blank=True)
     avatar = models.CharField(max_length=500, blank=True, default="")
     notifications_enabled = models.BooleanField(default=True)
+    department = models.CharField(max_length=100, blank=True, default="")
 
     class Meta:
         db_table = "app_user"

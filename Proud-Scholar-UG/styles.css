@@ -686,6 +686,33 @@ button {
   color: var(--green);
 }
 
+.empty-state {
+  color: var(--muted);
+  padding: 12px 0;
+}
+
+.table-shell {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th,
+.data-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .feedback-message.error {
   color: #dc2626;
 }

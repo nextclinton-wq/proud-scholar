@@ -18,6 +18,7 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.core.mail import send_mail
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
@@ -1291,6 +1292,76 @@ class AuthService:
         self._log_audit(user=user, action="mfa_disable", details={"status": "success"}, actor=user)
         return self._serialize_profile(user)
 
+    def list_staff(self, user: User) -> list[dict[str, Any]]:
+        self._ensure_staff_management_access(user)
+        qs = User.objects.filter(tenant=str(user.tenant), is_deleted=False).exclude(pk=user.pk).order_by("-date_joined")
+        return [self._serialize_staff_member(member) for member in qs]
+
+    def create_staff(self, user: User, data: dict[str, Any]) -> dict[str, Any]:
+        self._ensure_staff_management_access(user)
+        if data.get("password") != data.get("password_confirm"):
+            raise exceptions.ValidationError("Passwords do not match.")
+        password_validation.validate_password(data.get("password"))
+        if User.objects.filter(username=data["username"], is_deleted=False).exists():
+            raise exceptions.ValidationError("A user with that username already exists.")
+        if User.objects.filter(email=data["email"], is_deleted=False).exists():
+            raise exceptions.ValidationError("A user with that email already exists.")
+        staff = User.objects.create(
+            username=data["username"],
+            email=data["email"],
+            first_name=data.get("first_name", ""),
+            last_name=data.get("last_name", ""),
+            tenant=str(user.tenant),
+            department=data.get("department", ""),
+            is_staff=True,
+            is_active=True,
+        )
+        staff.set_password(data["password"])
+        staff.save(update_fields=["password", "department", "is_staff", "is_active"])
+        self._log_audit(user=user, action="staff_create", details={"staff_id": str(staff.id)}, actor=user)
+        return self._serialize_staff_member(staff)
+
+    def update_staff(self, user: User, target_user: User, data: dict[str, Any]) -> dict[str, Any]:
+        self._ensure_staff_management_access(user)
+        if data.get("username") and data["username"] != target_user.username and User.objects.filter(username=data["username"], is_deleted=False).exclude(pk=target_user.pk).exists():
+            raise exceptions.ValidationError("A user with that username already exists.")
+        if data.get("email") and data["email"] != target_user.email and User.objects.filter(email=data["email"], is_deleted=False).exclude(pk=target_user.pk).exists():
+            raise exceptions.ValidationError("A user with that email already exists.")
+        if data.get("username"):
+            target_user.username = data["username"]
+        if "email" in data:
+            target_user.email = data["email"]
+        if "first_name" in data:
+            target_user.first_name = data.get("first_name", "")
+        if "last_name" in data:
+            target_user.last_name = data.get("last_name", "")
+        if "department" in data:
+            target_user.department = data.get("department", "")
+        if "is_staff" in data:
+            target_user.is_staff = bool(data["is_staff"])
+        target_user.save(update_fields=["username", "email", "first_name", "last_name", "department", "is_staff"])
+        self._log_audit(user=user, action="staff_update", details={"staff_id": str(target_user.id)}, actor=user)
+        return self._serialize_staff_member(target_user)
+
+    def block_staff(self, user: User, target_user: User, blocked: bool) -> dict[str, Any]:
+        self._ensure_staff_management_access(user)
+        target_user.is_active = not blocked
+        target_user.save(update_fields=["is_active"])
+        self._log_audit(user=user, action="staff_block", details={"staff_id": str(target_user.id), "blocked": blocked}, actor=user)
+        return self._serialize_staff_member(target_user)
+
+    def reset_staff_password(self, user: User, target_user: User) -> dict[str, Any]:
+        self._ensure_staff_management_access(user)
+        send_mail(
+            subject="Your password reset was requested",
+            message=f"Hello {target_user.get_full_name() or target_user.username}, a password reset was requested for your account. Please contact your administrator to complete the reset.",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[target_user.email],
+            fail_silently=False,
+        )
+        self._log_audit(user=user, action="staff_reset_password", details={"staff_id": str(target_user.id)}, actor=user)
+        return {"message": "Password reset email sent."}
+
     def logout_user(self, refresh_token_value: str, user: User, request=None) -> dict[str, Any]:
         token_model = self._get_valid_refresh_token(refresh_token_value, user=user)
         token_model.revoke()
@@ -1344,6 +1415,23 @@ class AuthService:
         features = self.get_user_features(user)
         modules = sorted({feature.split(".")[0] for feature in features})
         return modules
+
+    def _ensure_staff_management_access(self, user: User) -> None:
+        if not (user.is_staff or user.is_superuser):
+            raise exceptions.PermissionDenied("Only administrators can manage staff.")
+
+    def _serialize_staff_member(self, user: User) -> dict[str, Any]:
+        return {
+            "id": str(user.id),
+            "username": user.username,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "department": getattr(user, "department", ""),
+            "is_staff": user.is_staff,
+            "is_active": user.is_active,
+            "tenant": str(user.tenant) if user.tenant is not None else None,
+        }
 
     def _ensure_system_admin_role(self, tenant: str | None, actor: User | None = None) -> Role | None:
         tenant_key = str(tenant or uuid.uuid4())

@@ -76,6 +76,26 @@
       return this.apiClient.post('/auth/mfa/disable', payload);
     }
 
+    async listStaff() {
+      return this.apiClient.get('/staff/');
+    }
+
+    async createStaff(payload) {
+      return this.apiClient.post('/staff/', payload);
+    }
+
+    async updateStaff(userId, payload) {
+      return this.apiClient.put(`/staff/${userId}/`, payload);
+    }
+
+    async blockStaff(userId, payload) {
+      return this.apiClient.post(`/staff/${userId}/block/`, payload);
+    }
+
+    async resetStaffPassword(userId) {
+      return this.apiClient.post(`/staff/${userId}/reset-password/`);
+    }
+
     async logout() {
       const refreshToken = this.tokenService.getRefreshToken();
       try {

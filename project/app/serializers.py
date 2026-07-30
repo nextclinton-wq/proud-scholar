@@ -88,6 +88,52 @@ class ChangePasswordSerializer(serializers.Serializer):
         return attrs
 
 
+class StaffCreateSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True, min_length=8)
+    password_confirm = serializers.CharField(write_only=True, min_length=8)
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    department = serializers.CharField(max_length=100, required=False, allow_blank=True)
+
+    def validate_username(self, value: str) -> str:
+        if User.objects.filter(username=value, is_deleted=False).exists():
+            raise serializers.ValidationError("A user with that username already exists.")
+        return value
+
+    def validate_email(self, value: str) -> str:
+        if User.objects.filter(email=value, is_deleted=False).exists():
+            raise serializers.ValidationError("A user with that email already exists.")
+        return value
+
+    def validate_password(self, value: str) -> str:
+        try:
+            password_validation.validate_password(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(list(exc.messages)) from exc
+        return value
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        password = attrs.get("password")
+        password_confirm = attrs.get("password_confirm")
+        if password and password_confirm and password != password_confirm:
+            raise serializers.ValidationError({"password_confirm": "Passwords do not match."})
+        return attrs
+
+
+class StaffUpdateSerializer(serializers.Serializer):
+    username = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    department = serializers.CharField(max_length=100, required=False, allow_blank=True)
+
+
+class StaffBlockSerializer(serializers.Serializer):
+    blocked = serializers.BooleanField(required=True)
+
+
 class NotificationPreferencesSerializer(serializers.Serializer):
     notifications_enabled = serializers.BooleanField()
 

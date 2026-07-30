@@ -341,6 +341,117 @@
     });
   }
 
+  function renderStaffManagement() {
+    const elements = getContextElements();
+    elements.content.innerHTML = `
+      <section class="hero card">
+        <div>
+          <p class="eyebrow">Administration</p>
+          <h1>Staff management</h1>
+          <p class="hero-copy">Create staff accounts, update their details, block access, and send password reset emails for your team.</p>
+        </div>
+        <div class="hero-metric">
+          <span>Manage</span>
+          <strong>Staff</strong>
+          <small>Tenant-scoped access for your registered staff.</small>
+        </div>
+      </section>
+      <section class="card settings-card">
+        <div class="section-head">
+          <h2>Staff directory</h2>
+          <button class="tool-button" type="button" id="staffAddButton">Add staff</button>
+        </div>
+        <div id="staffTable" class="staff-table"></div>
+      </section>
+    `;
+
+    const table = elements.content.querySelector('#staffTable');
+    const renderList = async () => {
+      try {
+        const staff = await authService.listStaff();
+        if (!staff.length) {
+          table.innerHTML = '<p class="empty-state">No staff members yet.</p>';
+          return;
+        }
+        table.innerHTML = `
+          <div class="table-shell">
+            <table class="data-table">
+              <thead><tr><th>Name</th><th>Email</th><th>Department</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody>
+                ${staff.map((member) => `
+                  <tr>
+                    <td>${member.first_name || member.username} ${member.last_name || ''}</td>
+                    <td>${member.email}</td>
+                    <td>${member.department || '—'}</td>
+                    <td>${member.is_active ? 'Active' : 'Blocked'}</td>
+                    <td>
+                      <div class="table-actions">
+                        <button class="tool-button" data-edit="${member.id}" type="button">Edit</button>
+                        <button class="tool-button" data-block="${member.id}" type="button">${member.is_active ? 'Block' : 'Unblock'}</button>
+                        <button class="tool-button" data-reset="${member.id}" type="button">Reset password</button>
+                      </div>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+        table.querySelectorAll('[data-edit]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const id = button.getAttribute('data-edit');
+            const member = staff.find((item) => item.id === id);
+            if (!member) return;
+            const firstName = window.prompt('First name', member.first_name || '');
+            const lastName = window.prompt('Last name', member.last_name || '');
+            const department = window.prompt('Department', member.department || '');
+            if (firstName !== null && lastName !== null && department !== null) {
+              authService.updateStaff(id, { first_name: firstName, last_name: lastName, department }).then(() => renderList()).catch(() => window.alert('Unable to update staff member.'));
+            }
+          });
+        });
+        table.querySelectorAll('[data-block]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const id = button.getAttribute('data-block');
+            const member = staff.find((item) => item.id === id);
+            if (!member) return;
+            authService.blockStaff(id, { blocked: member.is_active }).then(() => renderList()).catch(() => window.alert('Unable to change staff status.'));
+          });
+        });
+        table.querySelectorAll('[data-reset]').forEach((button) => {
+          button.addEventListener('click', () => {
+            const id = button.getAttribute('data-reset');
+            authService.resetStaffPassword(id).then(() => window.alert('Password reset email sent.')).catch(() => window.alert('Unable to send password reset email.'));
+          });
+        });
+      } catch (error) {
+        table.innerHTML = `<p class="empty-state">${error.message || 'Unable to load staff.'}</p>`;
+      }
+    };
+
+    renderList();
+
+    elements.content.querySelector('#staffAddButton')?.addEventListener('click', async () => {
+      const username = window.prompt('Username');
+      const email = window.prompt('Email');
+      const password = window.prompt('Password');
+      const passwordConfirm = window.prompt('Confirm password');
+      const firstName = window.prompt('First name');
+      const lastName = window.prompt('Last name');
+      const department = window.prompt('Department');
+      if (!username || !email || !password || !passwordConfirm) {
+        window.alert('Username, email, and passwords are required.');
+        return;
+      }
+      try {
+        await authService.createStaff({ username, email, password, password_confirm: passwordConfirm, first_name: firstName || '', last_name: lastName || '', department: department || '' });
+        await renderList();
+      } catch (error) {
+        window.alert(error.message || 'Unable to create staff account.');
+      }
+    });
+  }
+
   function renderNotificationsSettings() {
     const elements = getContextElements();
     const profile = state.profile || tokenService.getUser() || {};
@@ -461,6 +572,10 @@
     }
     if (normalizedRoute === '/notifications') {
       renderNotificationsSettings();
+      return;
+    }
+    if (normalizedRoute === '/staff-management') {
+      renderStaffManagement();
       return;
     }
 

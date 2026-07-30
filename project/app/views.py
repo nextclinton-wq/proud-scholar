@@ -42,6 +42,9 @@ from .serializers import (
     RoleFeatureAssignSerializer,
     RoleFeatureActionAssignSerializer,
     RoleFeatureSerializer,
+    StaffBlockSerializer,
+    StaffCreateSerializer,
+    StaffUpdateSerializer,
 )
 from .services import AuthService, DashboardService, FeatureService
 
@@ -621,6 +624,71 @@ class RoleFeatureViewSet(APIResponseMixin, viewsets.ViewSet):
         try:
             result = self.service.list_role_actions(request.user, role_id)
             return self.success_response(result, "Role actions retrieved successfully.")
+        except Exception as exc:
+            return self.error_response(str(exc), [str(exc)], status.HTTP_400_BAD_REQUEST)
+
+
+class StaffManagementViewSet(APIResponseMixin, viewsets.ViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = None
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        self.service = AuthService(request=request)
+
+    def list(self, request, *args, **kwargs):
+        try:
+            result = self.service.list_staff(request.user)
+            return self.success_response(result, "Staff retrieved successfully.", status.HTTP_200_OK)
+        except Exception as exc:
+            return self.error_response(str(exc), [str(exc)], status.HTTP_400_BAD_REQUEST)
+
+    def create(self, request, *args, **kwargs):
+        serializer = StaffCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return self.error_response("Validation failed.", serializer.errors, status.HTTP_400_BAD_REQUEST)
+        try:
+            result = self.service.create_staff(request.user, serializer.validated_data)
+            return self.success_response(result, "Staff created successfully.", status.HTTP_201_CREATED)
+        except Exception as exc:
+            return self.error_response(str(exc), [str(exc)], status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, *args, **kwargs):
+        user_id = kwargs.get("user_id")
+        target_user = User.objects.filter(id=user_id, tenant=str(request.user.tenant), is_deleted=False).first()
+        if not target_user:
+            return self.error_response("Staff member not found.", ["Staff member not found."], status.HTTP_404_NOT_FOUND)
+        serializer = StaffUpdateSerializer(data=request.data, partial=True)
+        if not serializer.is_valid():
+            return self.error_response("Validation failed.", serializer.errors, status.HTTP_400_BAD_REQUEST)
+        try:
+            result = self.service.update_staff(request.user, target_user, serializer.validated_data)
+            return self.success_response(result, "Staff updated successfully.", status.HTTP_200_OK)
+        except Exception as exc:
+            return self.error_response(str(exc), [str(exc)], status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=["post"], url_path="block", name="staff-block")
+    def block(self, request, user_id=None):
+        target_user = User.objects.filter(id=user_id, tenant=str(request.user.tenant), is_deleted=False).first()
+        if not target_user:
+            return self.error_response("Staff member not found.", ["Staff member not found."], status.HTTP_404_NOT_FOUND)
+        serializer = StaffBlockSerializer(data=request.data)
+        if not serializer.is_valid():
+            return self.error_response("Validation failed.", serializer.errors, status.HTTP_400_BAD_REQUEST)
+        try:
+            result = self.service.block_staff(request.user, target_user, serializer.validated_data["blocked"])
+            return self.success_response(result, "Staff status updated successfully.", status.HTTP_200_OK)
+        except Exception as exc:
+            return self.error_response(str(exc), [str(exc)], status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=["post"], url_path="reset-password", name="staff-reset-password")
+    def reset_password(self, request, user_id=None):
+        target_user = User.objects.filter(id=user_id, tenant=str(request.user.tenant), is_deleted=False).first()
+        if not target_user:
+            return self.error_response("Staff member not found.", ["Staff member not found."], status.HTTP_404_NOT_FOUND)
+        try:
+            result = self.service.reset_staff_password(request.user, target_user)
+            return self.success_response(result, "Password reset email sent.", status.HTTP_200_OK)
         except Exception as exc:
             return self.error_response(str(exc), [str(exc)], status.HTTP_400_BAD_REQUEST)
 
